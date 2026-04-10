@@ -235,7 +235,7 @@ async function handleRequest(req, res) {
     }
   }
 
-  // ── Stop hook endpoint (non-blocking) ──
+  // ── Stop hook endpoint (non-blocking) — reads transcript, sends last response to phone ──
   if (path === '/stop' && req.method === 'POST') {
     if (!isLocalhost(req)) return jsonResponse(res, 403, { error: 'localhost only' });
     try {
@@ -244,19 +244,9 @@ async function handleRequest(req, res) {
 
       if (!session_id) return jsonResponse(res, 400, { error: 'session_id required' });
 
-      // Update session info
-      if (state.sessions.has(session_id)) {
-        const session = state.sessions.get(session_id);
-        if (transcript_path) session.transcript_path = transcript_path;
-      } else {
-        state.sessions.set(session_id, {
-          project_dir: null,
-          transcript_path: transcript_path || null,
-          registered_at: new Date().toISOString(),
-        });
-      }
-
-      // Extract and send last assistant message to phone
+      // the following logic, which reads transcript and send it to the server as part of the Stop hook, is technically a bug
+      // we decided to embrace as a feature - it sends the last message, if one was sent after an update to the server -
+      // keeping it as it's nice to have
       if (transcript_path) {
         const lastMsg = extractLastAssistantMessage(transcript_path);
         if (lastMsg) {
@@ -269,7 +259,6 @@ async function handleRequest(req, res) {
         }
       }
 
-      sendToPhone({ type: 'session_waiting', session_id });
       return jsonResponse(res, 200, { ok: true });
     } catch (e) {
       return jsonResponse(res, 400, { error: e.message });

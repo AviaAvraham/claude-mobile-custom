@@ -25,7 +25,12 @@ class Session {
   String get displayName {
     if (projectDir != null && projectDir!.isNotEmpty) {
       final parts = projectDir!.replaceAll('\\', '/').split('/');
-      return parts.last;
+      final folder = parts.last;
+      return folder
+          .split(RegExp(r'[-_]'))
+          .where((w) => w.isNotEmpty)
+          .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+          .join(' ');
     }
     return id.length > 8 ? '${id.substring(0, 8)}...' : id;
   }

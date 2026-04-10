@@ -1,5 +1,5 @@
 #!/bin/bash
-# Claude Code Stop hook — sends transcript to server, exits immediately
+# Claude Code Stop hook — sends last response + idle status to phone
 input=$(cat)
 
 # Don't interfere with existing stop-hook recursion guard
@@ -10,11 +10,11 @@ fi
 # Check if server is running
 curl -sf http://localhost:4090/health >/dev/null 2>&1 || exit 0
 
-# Extract session_id and transcript_path with grep/sed (no jq dependency)
+# Extract session_id and transcript_path
 session_id=$(echo "$input" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:.*"\([^"]*\)"/\1/')
 transcript_path=$(echo "$input" | grep -o '"transcript_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:.*"\([^"]*\)"/\1/')
 
-# POST to /stop — server reads transcript, sends to phone, returns immediately
+# Send transcript to server (extracts last response, sends to phone)
 curl -sf -X POST http://localhost:4090/stop \
   -H "Content-Type: application/json" \
   -d "{\"session_id\":\"$session_id\",\"transcript_path\":\"$transcript_path\"}" \

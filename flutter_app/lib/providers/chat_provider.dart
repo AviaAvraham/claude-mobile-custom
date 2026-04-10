@@ -12,6 +12,9 @@ class ChatProvider extends ChangeNotifier {
   // Activity status per session
   final Map<String, String> _activityStatus = {}; // session_id -> 'thinking'|'coding'|'idle'
 
+  // Draft text per session
+  final Map<String, String> _drafts = {};
+
   ChatProvider(this._ws) {
     _ws.messages.listen((msg) {
       final type = msg['type'] as String?;
@@ -62,6 +65,9 @@ class ChatProvider extends ChangeNotifier {
   String getActivity(String sessionId) {
     return _activityStatus[sessionId] ?? 'idle';
   }
+
+  String getDraft(String sessionId) => _drafts[sessionId] ?? '';
+  void setDraft(String sessionId, String text) => _drafts[sessionId] = text;
 
   List<ChatMessage> _getOrCreateMessages(String sessionId) {
     return _messages.putIfAbsent(sessionId, () => []);

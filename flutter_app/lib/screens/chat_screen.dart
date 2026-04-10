@@ -20,7 +20,22 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    final draft = context.read<ChatProvider>().getDraft(widget.session.id);
+    if (draft.isNotEmpty) {
+      _textController.text = draft;
+    }
+    _textController.addListener(_saveDraft);
+  }
+
+  void _saveDraft() {
+    context.read<ChatProvider>().setDraft(widget.session.id, _textController.text);
+  }
+
+  @override
   void dispose() {
+    _textController.removeListener(_saveDraft);
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
