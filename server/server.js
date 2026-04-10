@@ -19,6 +19,7 @@ const state = {
   pendingMessages: new Map(),   // session_id → [messages]
   pendingPermissions: new Map(),// request_id → {resolve, reject, timeout, session_id}
   autoAllowTools: new Set(),    // tool names that are auto-approved
+  usage: null,                  // latest usage data from statusLine
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -319,6 +320,25 @@ async function handleRequest(req, res) {
     return res.end();
   }
 
+  // ── Usage update from statusLine ──
+  if (path === '/usage-update' && req.method === 'POST') {
+    if (!isLocalhost(req)) return jsonResponse(res, 403, { error: 'localhost only' });
+    try {
+      const body = await readBody(req);
+      state.usage = { ...body, updated_at: Date.now() };
+      sendToPhone({ type: 'usage', ...state.usage });
+      return jsonResponse(res, 200, { ok: true });
+    } catch (e) {
+      return jsonResponse(res, 400, { error: e.message });
+    }
+  }
+
+  // ── Get current usage ──
+  if (path === '/usage' && req.method === 'GET') {
+    if (!checkAuth(req)) return jsonResponse(res, 401, { error: 'unauthorized' });
+    return jsonResponse(res, 200, state.usage || { error: 'no usage data yet' });
+  }
+
   // ── Ack delivered (called when Claude reads the message) ──
   if (path === '/ack-delivered' && req.method === 'POST') {
     if (!isLocalhost(req)) return jsonResponse(res, 403, { error: 'localhost only' });
@@ -341,6 +361,15 @@ async function handleRequest(req, res) {
       const body = await readBody(req);
       const { session_id, activity, tool_name } = body;
       if (session_id && activity) {
+        // Ignore stale "idle" if "thinking" was sent recently (within 3s)
+        const now = Date.now();
+        const key = `activity_${session_id}`;
+        if (activity === 'idle' && state[key] && (now - state[key]) < 3000) {
+          return jsonResponse(res, 200, { ok: true, skipped: true });
+        }
+        if (activity === 'thinking' || activity === 'coding') {
+          state[key] = now;
+        }
         sendToPhone({ type: 'activity', session_id, activity, tool_name: tool_name || null });
       }
       return jsonResponse(res, 200, { ok: true });
@@ -452,6 +481,28 @@ function handlePhoneMessage(msg) {
     case 'message': {
       const { session_id, text, msg_id } = msg;
       if (!session_id || !text) return;
+
+      // Handle /usage command directly
+      if (text.trim() === '/usage') {
+        sendToPhone({ type: 'msg_ack', msg_id, status: 'delivered' });
+        if (state.usage) {
+          const u = state.usage;
+          const fiveReset = u.five_hour_resets ? new Date(u.five_hour_resets * 1000).toLocaleTimeString() : '?';
+          const sevenReset = u.seven_day_resets ? new Date(u.seven_day_resets * 1000).toLocaleDateString() : '?';
+          const bar = (pct) => {
+            const filled = Math.round(pct / 5);
+            return '\u2588'.repeat(filled) + '\u2591'.repeat(20 - filled) + ` ${pct}%`;
+          };
+          sendToPhone({
+            type: 'message', session_id, from: 'assistant',
+            text: `**Usage**\n\n5-hour:  ${bar(u.five_hour_pct)}\nResets: ${fiveReset}\n\n7-day:   ${bar(u.seven_day_pct)}\nResets: ${sevenReset}\n\nContext: ${u.context_pct || 0}%`,
+          });
+        } else {
+          sendToPhone({ type: 'message', session_id, from: 'assistant', text: 'No usage data yet. Wait for the status line to refresh.' });
+        }
+        return;
+      }
+
       deliverMessageToSession(session_id, text, msg_id);
       break;
     }

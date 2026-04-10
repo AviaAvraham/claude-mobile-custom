@@ -7,31 +7,54 @@ class MessageBubble extends StatelessWidget {
 
   const MessageBubble({super.key, required this.message});
 
-  Widget _buildCheckmarks() {
-    if (!message.isFromUser) return const SizedBox.shrink();
+  String _formatTime() {
+    final h = message.timestamp.hour.toString().padLeft(2, '0');
+    final m = message.timestamp.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
 
-    IconData icon;
-    Color color;
-    switch (message.deliveryStatus) {
-      case DeliveryStatus.sending:
-        icon = Icons.schedule;
-        color = Colors.white;
-      case DeliveryStatus.server:
-        icon = Icons.check;
-        color = Colors.white;
-      case DeliveryStatus.delivered:
-        icon = Icons.done_all;
-        color = Colors.white;
-    }
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 17, color: color),
-        ],
+  Widget _buildFooter(ThemeData theme) {
+    final timeText = Text(
+      _formatTime(),
+      style: TextStyle(
+        fontSize: 11,
+        color: message.isFromUser
+            ? Colors.white70
+            : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
       ),
     );
+
+    if (message.isFromUser) {
+      IconData icon;
+      Color color;
+      switch (message.deliveryStatus) {
+        case DeliveryStatus.sending:
+          icon = Icons.schedule;
+          color = Colors.white;
+        case DeliveryStatus.server:
+          icon = Icons.check;
+          color = Colors.white;
+        case DeliveryStatus.delivered:
+          icon = Icons.done_all;
+          color = Colors.white;
+      }
+      return Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            timeText,
+            const SizedBox(width: 4),
+            Icon(icon, size: 15, color: color),
+          ],
+        ),
+      );
+    } else {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: timeText,
+      );
+    }
   }
 
   @override
@@ -89,7 +112,7 @@ class MessageBubble extends StatelessWidget {
                       fontSize: 15,
                     ),
                   ),
-            _buildCheckmarks(),
+            _buildFooter(theme),
           ],
         ),
       ),
