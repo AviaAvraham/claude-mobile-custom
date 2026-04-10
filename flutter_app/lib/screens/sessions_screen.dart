@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/server_provider.dart';
 import '../providers/permission_provider.dart';
+import '../providers/chat_provider.dart';
 import '../services/websocket_service.dart' show WsConnectionState;
 import 'chat_screen.dart';
 
@@ -93,15 +94,16 @@ class SessionsScreen extends StatelessWidget {
             );
           }
 
-          return ListView.builder(
+          return Consumer2<PermissionProvider, ChatProvider>(
+            builder: (context, permProvider, chatProvider, _) => ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: provider.sessions.length,
             itemBuilder: (context, index) {
               final session = provider.sessions[index];
-              final permCount = context
-                  .watch<PermissionProvider>()
+              final permCount = permProvider
                   .getRequestsForSession(session.id)
                   .length;
+              final unread = chatProvider.getUnread(session.id);
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -125,14 +127,24 @@ class SessionsScreen extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  trailing: permCount > 0
-                      ? Badge(
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (permCount > 0)
+                        Badge(
                           label: Text('$permCount'),
                           child: const Icon(Icons.security),
-                        )
-                      : session.isWaiting
-                          ? const Icon(Icons.chevron_right)
-                          : null,
+                        ),
+                      if (unread > 0) ...[
+                        if (permCount > 0) const SizedBox(width: 8),
+                        CircleAvatar(
+                          radius: 12,
+                          backgroundColor: theme.colorScheme.primary,
+                          child: Text('$unread', style: const TextStyle(fontSize: 11, color: Colors.white)),
+                        ),
+                      ],
+                    ],
+                  ),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -144,6 +156,7 @@ class SessionsScreen extends StatelessWidget {
                 ),
               );
             },
+          ),
           );
         },
       ),

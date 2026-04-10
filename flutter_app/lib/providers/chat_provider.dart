@@ -15,6 +15,12 @@ class ChatProvider extends ChangeNotifier {
   // Draft text per session
   final Map<String, String> _drafts = {};
 
+  // Unread count per session
+  final Map<String, int> _unread = {};
+
+  // Currently viewed session (set by chat screen)
+  String? _activeSessionId;
+
   ChatProvider(this._ws) {
     _ws.messages.listen((msg) {
       final type = msg['type'] as String?;
@@ -30,6 +36,9 @@ class ChatProvider extends ChangeNotifier {
           timestamp: DateTime.now(),
           deliveryStatus: DeliveryStatus.delivered,
         ));
+        if (_activeSessionId != sessionId) {
+          _unread[sessionId] = (_unread[sessionId] ?? 0) + 1;
+        }
         notifyListeners();
       } else if (type == 'msg_ack') {
         final msgId = msg['msg_id'] as String?;
@@ -68,6 +77,17 @@ class ChatProvider extends ChangeNotifier {
 
   String getDraft(String sessionId) => _drafts[sessionId] ?? '';
   void setDraft(String sessionId, String text) => _drafts[sessionId] = text;
+
+  int getUnread(String sessionId) => _unread[sessionId] ?? 0;
+  int get totalUnread => _unread.values.fold(0, (a, b) => a + b);
+
+  void setActiveSession(String? sessionId) {
+    _activeSessionId = sessionId;
+    if (sessionId != null) {
+      _unread.remove(sessionId);
+      notifyListeners();
+    }
+  }
 
   List<ChatMessage> _getOrCreateMessages(String sessionId) {
     return _messages.putIfAbsent(sessionId, () => []);

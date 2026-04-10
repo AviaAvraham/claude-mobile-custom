@@ -27,6 +27,8 @@ class _ChatScreenState extends State<ChatScreen> {
       _textController.text = draft;
     }
     _textController.addListener(_saveDraft);
+    context.read<ChatProvider>().setActiveSession(widget.session.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   void _saveDraft() {
@@ -35,6 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    context.read<ChatProvider>().setActiveSession(null);
     _textController.removeListener(_saveDraft);
     _textController.dispose();
     _scrollController.dispose();
