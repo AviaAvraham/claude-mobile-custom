@@ -319,6 +319,36 @@ async function handleRequest(req, res) {
     return res.end();
   }
 
+  // ── Ack delivered (called when Claude reads the message) ──
+  if (path === '/ack-delivered' && req.method === 'POST') {
+    if (!isLocalhost(req)) return jsonResponse(res, 403, { error: 'localhost only' });
+    try {
+      const body = await readBody(req);
+      const { msg_id } = body;
+      if (msg_id) {
+        sendToPhone({ type: 'msg_ack', msg_id, status: 'delivered' });
+      }
+      return jsonResponse(res, 200, { ok: true });
+    } catch (e) {
+      return jsonResponse(res, 400, { error: e.message });
+    }
+  }
+
+  // ── Activity status ──
+  if (path === '/activity' && req.method === 'POST') {
+    if (!isLocalhost(req)) return jsonResponse(res, 403, { error: 'localhost only' });
+    try {
+      const body = await readBody(req);
+      const { session_id, activity, tool_name } = body;
+      if (session_id && activity) {
+        sendToPhone({ type: 'activity', session_id, activity, tool_name: tool_name || null });
+      }
+      return jsonResponse(res, 200, { ok: true });
+    } catch (e) {
+      return jsonResponse(res, 400, { error: e.message });
+    }
+  }
+
   // ── Send message to phone ──
   if (path === '/send' && req.method === 'POST') {
     if (!isLocalhost(req)) return jsonResponse(res, 403, { error: 'localhost only' });
@@ -360,8 +390,6 @@ function deliverMessageToSession(sessionId, text, msgId) {
   // Ack: message received by server (single check)
   sendToPhone({ type: 'msg_ack', msg_id: msgId, status: 'server' });
   console.log(`PHONE_MSG:${JSON.stringify({session_id: sessionId, text, msg_id: msgId})}`);
-  // Ack: message delivered to Claude (double check) — sent after logging so monitor picks it up
-  setTimeout(() => sendToPhone({ type: 'msg_ack', msg_id: msgId, status: 'delivered' }), 500);
 }
 
 // ── WebSocket ──────────────────────────────────────────────────────────────────

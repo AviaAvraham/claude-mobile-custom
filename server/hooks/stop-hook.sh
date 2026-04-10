@@ -20,4 +20,10 @@ curl -sf -X POST http://localhost:4090/stop \
   -d "{\"session_id\":\"$session_id\",\"transcript_path\":\"$transcript_path\"}" \
   --max-time 5 >/dev/null 2>&1 &
 
+# Send idle status
+curl -sf -X POST http://localhost:4090/activity \
+  -H "Content-Type: application/json" \
+  -d "{\"session_id\":\"$session_id\",\"activity\":\"idle\"}" \
+  --max-time 2 >/dev/null 2>&1 &
+
 exit 0

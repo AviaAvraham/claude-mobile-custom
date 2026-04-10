@@ -63,9 +63,9 @@ class _ChatScreenState extends State<ChatScreen> {
             } else if (activity == 'coding') {
               statusText = 'Writing code...';
               statusColor = Colors.cyan.shade400;
-            } else if (widget.session.isWaiting) {
-              statusText = 'Waiting for input';
-              statusColor = Colors.green.shade400;
+            } else if (activity == 'idle') {
+              statusText = 'Idle';
+              statusColor = Colors.grey;
             }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
