@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import '../models/chat_message.dart';
 import '../services/websocket_service.dart';
+import '../services/storage_service.dart';
 
 class ChatProvider extends ChangeNotifier {
   final WebSocketService _ws;
+  final StorageService _storage;
   int _msgCounter = 0;
 
   // session_id -> messages
@@ -21,7 +23,14 @@ class ChatProvider extends ChangeNotifier {
   // Currently viewed session (set by chat screen)
   String? _activeSessionId;
 
-  ChatProvider(this._ws) {
+  ChatProvider(this._ws, this._storage) {
+    // Retry unsent messages on reconnect
+    _ws.connectionState.listen((state) {
+      if (state == WsConnectionState.connected) {
+        _retryUnsent();
+      }
+    });
+
     _ws.messages.listen((msg) {
       final type = msg['type'] as String?;
 
@@ -39,6 +48,7 @@ class ChatProvider extends ChangeNotifier {
         if (_activeSessionId != sessionId) {
           _unread[sessionId] = (_unread[sessionId] ?? 0) + 1;
         }
+        _persist(sessionId);
         notifyListeners();
       } else if (type == 'msg_ack') {
         final msgId = msg['msg_id'] as String?;
@@ -82,15 +92,43 @@ class ChatProvider extends ChangeNotifier {
   int get totalUnread => _unread.values.fold(0, (a, b) => a + b);
 
   void setActiveSession(String? sessionId) {
-    _activeSessionId = sessionId;
     if (sessionId != null) {
       _unread.remove(sessionId);
-      notifyListeners();
     }
+    _activeSessionId = sessionId;
+    notifyListeners();
   }
 
   List<ChatMessage> _getOrCreateMessages(String sessionId) {
-    return _messages.putIfAbsent(sessionId, () => []);
+    return _messages.putIfAbsent(sessionId, () => _storage.getMessages(sessionId));
+  }
+
+  void _persist(String sessionId) {
+    final messages = _messages[sessionId];
+    if (messages != null) {
+      _storage.saveMessages(sessionId, messages);
+    }
+  }
+
+  void _retryUnsent() {
+    for (final entry in _messages.entries) {
+      retryUnsent(entry.key);
+    }
+  }
+
+  void retryUnsent(String sessionId) {
+    final messages = _messages[sessionId];
+    if (messages == null) return;
+    for (final msg in messages) {
+      if (msg.isFromUser && msg.deliveryStatus == DeliveryStatus.sending && msg.msgId != null) {
+        _ws.send({
+          'type': 'message',
+          'session_id': sessionId,
+          'text': msg.text,
+          'msg_id': msg.msgId,
+        });
+      }
+    }
   }
 
   void sendMessage(String sessionId, String text) {
@@ -113,6 +151,7 @@ class ChatProvider extends ChangeNotifier {
       'msg_id': msgId,
     });
 
+    _persist(sessionId);
     notifyListeners();
   }
 }

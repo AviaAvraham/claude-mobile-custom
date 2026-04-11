@@ -42,8 +42,8 @@ class SessionsScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Consumer<ServerProvider>(
-        builder: (context, provider, _) {
+      body: Consumer3<ServerProvider, PermissionProvider, ChatProvider>(
+        builder: (context, provider, permProvider, chatProvider, _) {
           if (provider.connectionState == WsConnectionState.connecting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -94,8 +94,7 @@ class SessionsScreen extends StatelessWidget {
             );
           }
 
-          return Consumer2<PermissionProvider, ChatProvider>(
-            builder: (context, permProvider, chatProvider, _) => ListView.builder(
+          return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: provider.sessions.length,
             itemBuilder: (context, index) {
@@ -151,12 +150,14 @@ class SessionsScreen extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (_) => ChatScreen(session: session),
                       ),
-                    );
+                    ).then((_) {
+                      // Force rebuild to clear unread badge
+                      chatProvider.setActiveSession(null);
+                    });
                   },
                 ),
               );
             },
-          ),
           );
         },
       ),

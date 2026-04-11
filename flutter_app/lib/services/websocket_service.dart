@@ -25,12 +25,13 @@ class WebSocketService {
     _doConnect();
   }
 
-  void _doConnect() {
+  Future<void> _doConnect() async {
     if (_url == null) return;
     _setState(WsConnectionState.connecting);
 
     try {
       _channel = WebSocketChannel.connect(Uri.parse(_url!));
+      await _channel!.ready;
 
       _channel!.stream.listen(
         (data) {
@@ -69,7 +70,7 @@ class WebSocketService {
     final delay = Duration(
       seconds: _reconnectAttempts < 5
           ? (1 << _reconnectAttempts) // 1, 2, 4, 8, 16
-          : 30,
+          : 16,
     );
     _reconnectAttempts++;
     _reconnectTimer = Timer(delay, _doConnect);

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/server_config.dart';
+import '../models/chat_message.dart';
 
 class StorageService {
   static const _serversKey = 'saved_servers';
@@ -48,5 +49,35 @@ class StorageService {
     final jsonStr = _prefs.getString(_lastServerKey);
     if (jsonStr == null) return null;
     return ServerConfig.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
+  }
+
+  // ── Chat message persistence ──
+
+  String _messagesKey(String sessionId) => 'messages_$sessionId';
+
+  List<ChatMessage> getMessages(String sessionId) {
+    final jsonStr = _prefs.getString(_messagesKey(sessionId));
+    if (jsonStr == null) return [];
+    final list = json.decode(jsonStr) as List;
+    return list.map((e) {
+      final map = e as Map<String, dynamic>;
+      return ChatMessage(
+        text: map['text'] as String,
+        from: map['from'] as String,
+        timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp'] as int),
+        msgId: map['msgId'] as String?,
+        deliveryStatus: DeliveryStatus.delivered,
+      );
+    }).toList();
+  }
+
+  Future<void> saveMessages(String sessionId, List<ChatMessage> messages) async {
+    final list = messages.map((m) => {
+      'text': m.text,
+      'from': m.from,
+      'timestamp': m.timestamp.millisecondsSinceEpoch,
+      'msgId': m.msgId,
+    }).toList();
+    await _prefs.setString(_messagesKey(sessionId), json.encode(list));
   }
 }

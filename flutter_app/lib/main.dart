@@ -43,7 +43,7 @@ class ClaudeMobileApp extends StatelessWidget {
           create: (_) => ServerProvider(wsService, storage),
         ),
         ChangeNotifierProvider(
-          create: (_) => ChatProvider(wsService),
+          create: (_) => ChatProvider(wsService, storage),
         ),
         ChangeNotifierProvider(
           create: (_) => PermissionProvider(wsService, notificationService),

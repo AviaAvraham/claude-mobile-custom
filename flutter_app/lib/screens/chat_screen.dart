@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/session.dart';
 import '../providers/chat_provider.dart';
 import '../providers/permission_provider.dart';
+import '../providers/server_provider.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/permission_card.dart';
 
@@ -18,17 +20,22 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
+  Timer? _retryTimer;
 
   @override
   void initState() {
     super.initState();
-    final draft = context.read<ChatProvider>().getDraft(widget.session.id);
+    final chatProvider = context.read<ChatProvider>();
+    final draft = chatProvider.getDraft(widget.session.id);
     if (draft.isNotEmpty) {
       _textController.text = draft;
     }
     _textController.addListener(_saveDraft);
-    context.read<ChatProvider>().setActiveSession(widget.session.id);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    chatProvider.setActiveSession(widget.session.id);
+    chatProvider.retryUnsent(widget.session.id);
+    _retryTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      context.read<ChatProvider>().retryUnsent(widget.session.id);
+    });
   }
 
   void _saveDraft() {
@@ -37,6 +44,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _retryTimer?.cancel();
     context.read<ChatProvider>().setActiveSession(null);
     _textController.removeListener(_saveDraft);
     _textController.dispose();
@@ -49,19 +57,6 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty) return;
     _textController.clear();
     context.read<ChatProvider>().sendMessage(widget.session.id, text);
-    _scrollToBottom();
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
   }
 
   @override
@@ -70,30 +65,33 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Consumer<ChatProvider>(
-          builder: (_, chatProvider, __) {
+        title: Consumer2<ChatProvider, ServerProvider>(
+          builder: (_, chatProvider, serverProvider, __) {
             final activity = chatProvider.getActivity(widget.session.id);
-            String? statusText;
-            Color? statusColor;
-            if (activity == 'thinking') {
+            final connected = serverProvider.isConnected;
+            String statusText;
+            Color statusColor;
+            if (!connected) {
+              statusText = 'Disconnected';
+              statusColor = Colors.red;
+            } else if (activity == 'thinking') {
               statusText = 'Thinking...';
               statusColor = Colors.amber.shade400;
             } else if (activity == 'coding') {
               statusText = 'Writing code...';
               statusColor = Colors.cyan.shade400;
-            } else if (activity == 'idle') {
-              statusText = 'Idle';
-              statusColor = Colors.grey;
+            } else {
+              statusText = 'Connected';
+              statusColor = Colors.green.shade400;
             }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(widget.session.displayName, style: const TextStyle(fontSize: 16)),
-                if (statusText != null)
-                  Text(
-                    statusText,
-                    style: TextStyle(fontSize: 12, color: statusColor),
-                  ),
+                Text(
+                  statusText,
+                  style: TextStyle(fontSize: 12, color: statusColor),
+                ),
               ],
             );
           },
@@ -154,16 +152,14 @@ class _ChatScreenState extends State<ChatScreen> {
                   );
                 }
 
-                // Auto-scroll on new messages
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _scrollToBottom();
-                });
-
                 return ListView.builder(
                   controller: _scrollController,
+                  reverse: true,
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: messages.length,
-                  itemBuilder: (_, index) => MessageBubble(message: messages[index]),
+                  itemBuilder: (_, index) => MessageBubble(
+                    message: messages[messages.length - 1 - index],
+                  ),
                 );
               },
             ),
