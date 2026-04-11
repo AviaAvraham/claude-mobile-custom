@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import '../models/server_config.dart';
 import '../models/session.dart';
 import '../services/websocket_service.dart';
 import '../services/storage_service.dart';
 
-class ServerProvider extends ChangeNotifier {
+class ServerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final WebSocketService _ws;
   final StorageService _storage;
 
@@ -54,6 +55,26 @@ class ServerProvider extends ChangeNotifier {
     for (final server in _savedServers) {
       _ws.connect(server.wsUrl);
     }
+
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Reconnect any disconnected servers when app comes to foreground
+      for (final server in _savedServers) {
+        if (getConnectionState(server) == WsConnectionState.disconnected) {
+          _ws.connect(server.wsUrl);
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   List<ServerConfig> get savedServers => _savedServers;
