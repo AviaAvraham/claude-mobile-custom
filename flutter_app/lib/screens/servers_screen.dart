@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/server_provider.dart';
+import '../services/websocket_service.dart' show WsConnectionState;
 import 'pair_screen.dart';
 import 'sessions_screen.dart';
 
@@ -53,8 +54,10 @@ class ServersScreen extends StatelessWidget {
             itemCount: provider.savedServers.length,
             itemBuilder: (context, index) {
               final server = provider.savedServers[index];
-              final isActive = provider.activeServer == server;
-              final isConnected = isActive && provider.isConnected;
+              final connState = provider.getConnectionState(server);
+              final isConnected = connState == WsConnectionState.connected;
+              final isConnecting = connState == WsConnectionState.connecting;
+              final sessionCount = provider.getSessionsForServer(server).length;
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -73,20 +76,22 @@ class ServersScreen extends StatelessWidget {
                   title: Text(server.name),
                   subtitle: Text(
                     isConnected
-                        ? 'Connected - ${provider.sessions.length} session(s)'
-                        : isActive
+                        ? 'Connected - $sessionCount session(s)'
+                        : isConnecting
                             ? 'Connecting...'
-                            : 'Tap to connect',
+                            : 'Disconnected',
                     style: TextStyle(
                       color: isConnected
                           ? Colors.green.shade700
-                          : theme.colorScheme.onSurfaceVariant,
+                          : isConnecting
+                              ? theme.colorScheme.onSurfaceVariant
+                              : Colors.red,
                     ),
                   ),
-                  trailing: isActive
+                  trailing: isConnected
                       ? IconButton(
                           icon: const Icon(Icons.close),
-                          onPressed: provider.disconnect,
+                          onPressed: () => provider.disconnectFrom(server),
                         )
                       : null,
                   onTap: () {
@@ -94,7 +99,7 @@ class ServersScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const SessionsScreen(),
+                          builder: (_) => SessionsScreen(server: server),
                         ),
                       );
                     } else {

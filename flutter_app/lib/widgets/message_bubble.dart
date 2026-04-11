@@ -58,16 +58,20 @@ class MessageBubble extends StatelessWidget {
   }
 
   String _prepareMarkdown(String text) {
-    // Ensure blank lines before list starts and headings so markdown parses them correctly
+    final listPattern = RegExp(r'^\s*(\d+\.|[-*])\s');
     final lines = text.split('\n');
     final buffer = StringBuffer();
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
       final prevLine = i > 0 ? lines[i - 1] : '';
-      // Add blank line before numbered/bulleted list if previous line isn't empty or a list item
-      if (prevLine.isNotEmpty &&
-          !RegExp(r'^\s*(\d+\.|[-*])').hasMatch(prevLine) &&
-          RegExp(r'^\s*(\d+\.|[-*])\s').hasMatch(line)) {
+      final isListLine = listPattern.hasMatch(line);
+      final wasList = listPattern.hasMatch(prevLine);
+      // Blank line before list start
+      if (prevLine.isNotEmpty && !wasList && isListLine) {
+        buffer.writeln();
+      }
+      // Blank line after list end
+      if (prevLine.isNotEmpty && wasList && !isListLine && line.isNotEmpty) {
         buffer.writeln();
       }
       buffer.writeln(line);

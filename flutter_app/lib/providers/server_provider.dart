@@ -9,73 +9,113 @@ class ServerProvider extends ChangeNotifier {
   final StorageService _storage;
 
   List<ServerConfig> _savedServers = [];
-  ServerConfig? _activeServer;
-  WsConnectionState _connectionState = WsConnectionState.disconnected;
-  List<Session> _sessions = [];
+  // Per-server state
+  final Map<String, WsConnectionState> _connectionStates = {};
+  final Map<String, List<Session>> _serverSessions = {}; // serverUrl -> sessions
 
   ServerProvider(this._ws, this._storage) {
     _savedServers = _storage.getSavedServers();
 
-    _ws.connectionState.listen((state) {
-      _connectionState = state;
+    _ws.connectionStates.listen((event) {
+      _connectionStates[event.serverUrl] = event.state;
       notifyListeners();
     });
 
     _ws.messages.listen((msg) {
+      final serverUrl = msg['_serverUrl'] as String?;
       if (msg['type'] == 'sessions') {
-        _sessions = (msg['sessions'] as List)
+        final sessions = (msg['sessions'] as List)
             .map((s) => Session.fromJson(s as Map<String, dynamic>))
             .toList();
+        if (serverUrl != null) {
+          _serverSessions[serverUrl] = sessions;
+        }
         notifyListeners();
       } else if (msg['type'] == 'session_waiting') {
         final sessionId = msg['session_id'] as String;
-        final session = _sessions.firstWhere(
-          (s) => s.id == sessionId,
-          orElse: () => Session(id: sessionId, isWaiting: true),
-        );
-        session.isWaiting = true;
-        if (!_sessions.any((s) => s.id == sessionId)) {
-          _sessions.add(session);
+        if (serverUrl != null) {
+          final sessions = _serverSessions[serverUrl] ?? [];
+          final session = sessions.firstWhere(
+            (s) => s.id == sessionId,
+            orElse: () {
+              final s = Session(id: sessionId, isWaiting: true);
+              sessions.add(s);
+              return s;
+            },
+          );
+          session.isWaiting = true;
+          _serverSessions[serverUrl] = sessions;
         }
         notifyListeners();
       }
     });
+
+    // Auto-connect to all saved servers
+    for (final server in _savedServers) {
+      _ws.connect(server.wsUrl);
+    }
   }
 
   List<ServerConfig> get savedServers => _savedServers;
-  ServerConfig? get activeServer => _activeServer;
-  WsConnectionState get connectionState => _connectionState;
-  bool get isConnected => _connectionState == WsConnectionState.connected;
-  List<Session> get sessions => _sessions;
+
+  WsConnectionState getConnectionState(ServerConfig config) {
+    return _connectionStates[config.wsUrl] ?? WsConnectionState.disconnected;
+  }
+
+  bool isServerConnected(ServerConfig config) {
+    return getConnectionState(config) == WsConnectionState.connected;
+  }
+
+  // For backwards compat — checks if any server is connected
+  bool get isConnected => _connectionStates.values.any((s) => s == WsConnectionState.connected);
+
+  List<Session> getSessionsForServer(ServerConfig config) {
+    return _serverSessions[config.wsUrl] ?? [];
+  }
+
+  // All sessions across all servers
+  List<Session> get allSessions {
+    return _serverSessions.values.expand((s) => s).toList();
+  }
+
+  String? getServerUrlForSession(String sessionId) {
+    for (final entry in _serverSessions.entries) {
+      if (entry.value.any((s) => s.id == sessionId)) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
 
   Future<void> addServer(ServerConfig config) async {
     await _storage.saveServer(config);
     _savedServers = _storage.getSavedServers();
-    notifyListeners();
-  }
-
-  Future<void> removeServer(ServerConfig config) async {
-    if (_activeServer == config) disconnect();
-    await _storage.removeServer(config);
-    _savedServers = _storage.getSavedServers();
-    notifyListeners();
-  }
-
-  void connectTo(ServerConfig config) {
-    _activeServer = config;
-    _storage.setLastServer(config);
     _ws.connect(config.wsUrl);
     notifyListeners();
   }
 
-  void disconnect() {
-    _ws.disconnect();
-    _activeServer = null;
-    _sessions = [];
+  Future<void> removeServer(ServerConfig config) async {
+    _ws.disconnect(config.wsUrl);
+    await _storage.removeServer(config);
+    _savedServers = _storage.getSavedServers();
+    _serverSessions.remove(config.wsUrl);
+    _connectionStates.remove(config.wsUrl);
     notifyListeners();
   }
 
-  void refreshSessions() {
-    _ws.send({'type': 'list_sessions'});
+  void connectTo(ServerConfig config) {
+    if (getConnectionState(config) != WsConnectionState.disconnected) return;
+    _ws.connect(config.wsUrl);
+    notifyListeners();
+  }
+
+  void disconnectFrom(ServerConfig config) {
+    _ws.disconnect(config.wsUrl);
+    _serverSessions.remove(config.wsUrl);
+    notifyListeners();
+  }
+
+  void refreshSessions(ServerConfig config) {
+    _ws.sendTo(config.wsUrl, {'type': 'list_sessions'});
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/server_config.dart';
 import '../providers/server_provider.dart';
 import '../providers/permission_provider.dart';
 import '../providers/chat_provider.dart';
@@ -7,7 +8,9 @@ import '../services/websocket_service.dart' show WsConnectionState;
 import 'chat_screen.dart';
 
 class SessionsScreen extends StatelessWidget {
-  const SessionsScreen({super.key});
+  final ServerConfig server;
+
+  const SessionsScreen({super.key, required this.server});
 
   @override
   Widget build(BuildContext context) {
@@ -15,11 +18,7 @@ class SessionsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Consumer<ServerProvider>(
-          builder: (_, provider, __) => Text(
-            provider.activeServer?.name ?? 'Sessions',
-          ),
-        ),
+        title: Text(server.name),
         actions: [
           Consumer<PermissionProvider>(
             builder: (_, permProvider, __) {
@@ -37,18 +36,21 @@ class SessionsScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              context.read<ServerProvider>().refreshSessions();
+              context.read<ServerProvider>().refreshSessions(server);
             },
           ),
         ],
       ),
       body: Consumer3<ServerProvider, PermissionProvider, ChatProvider>(
         builder: (context, provider, permProvider, chatProvider, _) {
-          if (provider.connectionState == WsConnectionState.connecting) {
+          final connState = provider.getConnectionState(server);
+          final sessions = provider.getSessionsForServer(server);
+
+          if (connState == WsConnectionState.connecting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (!provider.isConnected) {
+          if (connState != WsConnectionState.connected) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -58,11 +60,7 @@ class SessionsScreen extends StatelessWidget {
                   const Text('Disconnected'),
                   const SizedBox(height: 8),
                   FilledButton(
-                    onPressed: () {
-                      if (provider.activeServer != null) {
-                        provider.connectTo(provider.activeServer!);
-                      }
-                    },
+                    onPressed: () => provider.connectTo(server),
                     child: const Text('Reconnect'),
                   ),
                 ],
@@ -70,7 +68,7 @@ class SessionsScreen extends StatelessWidget {
             );
           }
 
-          if (provider.sessions.isEmpty) {
+          if (sessions.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -96,9 +94,9 @@ class SessionsScreen extends StatelessWidget {
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: provider.sessions.length,
+            itemCount: sessions.length,
             itemBuilder: (context, index) {
-              final session = provider.sessions[index];
+              final session = sessions[index];
               final permCount = permProvider
                   .getRequestsForSession(session.id)
                   .length;
@@ -119,13 +117,16 @@ class SessionsScreen extends StatelessWidget {
                     ),
                   ),
                   title: Text(session.displayName),
-                  subtitle: Text(
-                    session.isWaiting
-                        ? 'Waiting for input...'
-                        : session.projectDir ?? session.id,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  subtitle: () {
+                    final lastMsg = chatProvider.getLastMessage(session.id);
+                    return Text(
+                      lastMsg != null
+                          ? '${lastMsg.isFromUser ? 'You: ' : ''}${lastMsg.text}'
+                          : session.projectDir ?? session.id,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  }(),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -151,7 +152,6 @@ class SessionsScreen extends StatelessWidget {
                         builder: (_) => ChatScreen(session: session),
                       ),
                     ).then((_) {
-                      // Force rebuild to clear unread badge
                       chatProvider.setActiveSession(null);
                     });
                   },

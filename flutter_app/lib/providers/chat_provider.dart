@@ -11,8 +11,11 @@ class ChatProvider extends ChangeNotifier {
   // session_id -> messages
   final Map<String, List<ChatMessage>> _messages = {};
 
+  // session_id -> serverUrl (learned from incoming messages)
+  final Map<String, String> _sessionServer = {};
+
   // Activity status per session
-  final Map<String, String> _activityStatus = {}; // session_id -> 'thinking'|'coding'|'idle'
+  final Map<String, String> _activityStatus = {};
 
   // Draft text per session
   final Map<String, String> _drafts = {};
@@ -20,24 +23,27 @@ class ChatProvider extends ChangeNotifier {
   // Unread count per session
   final Map<String, int> _unread = {};
 
-  // Currently viewed session (set by chat screen)
+  // Currently viewed session
   String? _activeSessionId;
 
   ChatProvider(this._ws, this._storage) {
-    // Retry unsent messages on reconnect
-    _ws.connectionState.listen((state) {
-      if (state == WsConnectionState.connected) {
-        _retryUnsent();
+    // Retry unsent messages on any server reconnect
+    _ws.connectionStates.listen((event) {
+      if (event.state == WsConnectionState.connected) {
+        _retryUnsentForServer(event.serverUrl);
       }
     });
 
     _ws.messages.listen((msg) {
       final type = msg['type'] as String?;
+      final serverUrl = msg['_serverUrl'] as String?;
 
       if (type == 'message' && msg['from'] == 'assistant') {
         final sessionId = msg['session_id'] as String;
         final text = msg['text'] as String? ?? '';
         if (text.isEmpty) return;
+
+        if (serverUrl != null) _sessionServer[sessionId] = serverUrl;
 
         _getOrCreateMessages(sessionId).add(ChatMessage(
           text: text,
@@ -70,8 +76,20 @@ class ChatProvider extends ChangeNotifier {
         final sessionId = msg['session_id'] as String?;
         final activity = msg['activity'] as String?;
         if (sessionId != null && activity != null) {
+          if (serverUrl != null) _sessionServer[sessionId] = serverUrl;
           _activityStatus[sessionId] = activity;
           notifyListeners();
+        }
+      } else if (type == 'sessions' && serverUrl != null) {
+        // Learn session -> server mappings
+        final sessions = msg['sessions'] as List?;
+        if (sessions != null) {
+          for (final s in sessions) {
+            if (s is Map<String, dynamic>) {
+              final id = s['id'] as String?;
+              if (id != null) _sessionServer[id] = serverUrl;
+            }
+          }
         }
       }
     });
@@ -79,6 +97,15 @@ class ChatProvider extends ChangeNotifier {
 
   List<ChatMessage> getMessages(String sessionId) {
     return _getOrCreateMessages(sessionId);
+  }
+
+  ChatMessage? getLastMessage(String sessionId) {
+    // Use in-memory if already loaded
+    final msgs = _messages[sessionId];
+    if (msgs != null && msgs.isNotEmpty) return msgs.last;
+    // Peek from storage without loading into memory
+    final stored = _storage.getMessages(sessionId);
+    return stored.isNotEmpty ? stored.last : null;
   }
 
   String getActivity(String sessionId) {
@@ -103,6 +130,12 @@ class ChatProvider extends ChangeNotifier {
     return _messages.putIfAbsent(sessionId, () => _storage.getMessages(sessionId));
   }
 
+  void clearMessages(String sessionId) {
+    _messages[sessionId]?.clear();
+    _persist(sessionId);
+    notifyListeners();
+  }
+
   void _persist(String sessionId) {
     final messages = _messages[sessionId];
     if (messages != null) {
@@ -110,18 +143,23 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  void _retryUnsent() {
+  void _retryUnsentForServer(String serverUrl) {
     for (final entry in _messages.entries) {
-      retryUnsent(entry.key);
+      final sessionServerUrl = _sessionServer[entry.key];
+      if (sessionServerUrl == serverUrl) {
+        retryUnsent(entry.key);
+      }
     }
   }
 
   void retryUnsent(String sessionId) {
     final messages = _messages[sessionId];
     if (messages == null) return;
+    final serverUrl = _sessionServer[sessionId];
+    if (serverUrl == null) return;
     for (final msg in messages) {
       if (msg.isFromUser && msg.deliveryStatus == DeliveryStatus.sending && msg.msgId != null) {
-        _ws.send({
+        _ws.sendTo(serverUrl, {
           'type': 'message',
           'session_id': sessionId,
           'text': msg.text,
@@ -144,12 +182,15 @@ class ChatProvider extends ChangeNotifier {
       deliveryStatus: DeliveryStatus.sending,
     ));
 
-    _ws.send({
-      'type': 'message',
-      'session_id': sessionId,
-      'text': text,
-      'msg_id': msgId,
-    });
+    final serverUrl = _sessionServer[sessionId];
+    if (serverUrl != null) {
+      _ws.sendTo(serverUrl, {
+        'type': 'message',
+        'session_id': sessionId,
+        'text': text,
+        'msg_id': msgId,
+      });
+    }
 
     _persist(sessionId);
     notifyListeners();

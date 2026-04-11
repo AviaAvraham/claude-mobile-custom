@@ -52,6 +52,29 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
+  void _showClearDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear chat display?'),
+        content: const Text('This clears messages from this app only. The actual Claude session is not affected.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              context.read<ChatProvider>().clearMessages(widget.session.id);
+              Navigator.pop(ctx);
+            },
+            child: Text('Clear', style: TextStyle(color: Colors.red.shade700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _sendMessage() {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
@@ -96,6 +119,12 @@ class _ChatScreenState extends State<ChatScreen> {
             );
           },
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () => _showClearDialog(context),
+          ),
+        ],
       ),
       body: Column(
         children: [

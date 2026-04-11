@@ -8,12 +8,15 @@ class PermissionProvider extends ChangeNotifier {
   final NotificationService _notifications;
 
   final List<PermissionRequest> _requests = [];
+  final Map<String, String> _requestServer = {}; // requestId -> serverUrl
 
   PermissionProvider(this._ws, this._notifications) {
     _ws.messages.listen((msg) {
+      final serverUrl = msg['_serverUrl'] as String?;
       if (msg['type'] == 'permission_request') {
         final request = PermissionRequest.fromJson(msg);
         _requests.add(request);
+        if (serverUrl != null) _requestServer[request.requestId] = serverUrl;
         _notifications.showPermissionRequest(
           toolName: request.toolName,
           sessionId: request.sessionId,
@@ -22,6 +25,7 @@ class PermissionProvider extends ChangeNotifier {
       } else if (msg['type'] == 'permission_timeout') {
         final requestId = msg['request_id'] as String;
         _requests.removeWhere((r) => r.requestId == requestId);
+        _requestServer.remove(requestId);
         notifyListeners();
       }
     });
@@ -53,11 +57,18 @@ class PermissionProvider extends ChangeNotifier {
 
     request.resolved = true;
 
-    _ws.send({
+    final serverUrl = _requestServer[requestId];
+    final data = {
       'type': 'permission_response',
       'request_id': requestId,
       'decision': decision,
-    });
+    };
+
+    if (serverUrl != null) {
+      _ws.sendTo(serverUrl, data);
+    } else {
+      _ws.sendAll(data);
+    }
 
     notifyListeners();
   }

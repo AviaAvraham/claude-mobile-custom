@@ -48,7 +48,7 @@ class _PairScreenState extends State<PairScreen> {
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const SessionsScreen()),
+      MaterialPageRoute(builder: (_) => SessionsScreen(server: config)),
     );
   }
 

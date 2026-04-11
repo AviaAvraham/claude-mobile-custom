@@ -4,107 +4,142 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 enum WsConnectionState { disconnected, connecting, connected }
 
-class WebSocketService {
-  WebSocketChannel? _channel;
-  WsConnectionState _state = WsConnectionState.disconnected;
-  Timer? _reconnectTimer;
-  Timer? _pingTimer;
-  int _reconnectAttempts = 0;
-  String? _url;
+class _Connection {
+  WebSocketChannel? channel;
+  WsConnectionState state = WsConnectionState.disconnected;
+  Timer? reconnectTimer;
+  Timer? pingTimer;
+  int reconnectAttempts = 0;
+  bool disposed = false;
+  final String url;
 
+  _Connection(this.url);
+}
+
+/// Manages multiple WebSocket connections keyed by server URL.
+class WebSocketService {
+  final Map<String, _Connection> _connections = {};
+
+  // Merged stream of all messages, tagged with serverUrl
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
-  final _stateController = StreamController<WsConnectionState>.broadcast();
+  final _stateController = StreamController<({String serverUrl, WsConnectionState state})>.broadcast();
 
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
-  Stream<WsConnectionState> get connectionState => _stateController.stream;
-  WsConnectionState get currentState => _state;
+  Stream<({String serverUrl, WsConnectionState state})> get connectionStates => _stateController.stream;
 
-  void connect(String wsUrl) {
-    _url = wsUrl;
-    _reconnectAttempts = 0;
-    _doConnect();
+  WsConnectionState getState(String serverUrl) {
+    return _connections[serverUrl]?.state ?? WsConnectionState.disconnected;
   }
 
-  Future<void> _doConnect() async {
-    if (_url == null) return;
-    _setState(WsConnectionState.connecting);
+  void connect(String wsUrl) {
+    if (_connections.containsKey(wsUrl)) {
+      disconnect(wsUrl);
+    }
+    final conn = _Connection(wsUrl);
+    _connections[wsUrl] = conn;
+    _doConnect(conn);
+  }
+
+  Future<void> _doConnect(_Connection conn) async {
+    if (conn.disposed) return;
+    _setState(conn, WsConnectionState.connecting);
 
     try {
-      _channel = WebSocketChannel.connect(Uri.parse(_url!));
-      await _channel!.ready;
+      conn.channel = WebSocketChannel.connect(Uri.parse(conn.url));
+      await conn.channel!.ready;
 
-      _channel!.stream.listen(
+      conn.channel!.stream.listen(
         (data) {
-          _reconnectAttempts = 0;
+          conn.reconnectAttempts = 0;
           try {
             final msg = json.decode(data as String) as Map<String, dynamic>;
+            msg['_serverUrl'] = conn.url;
             _messageController.add(msg);
           } catch (_) {}
         },
         onDone: () {
-          _setState(WsConnectionState.disconnected);
-          _scheduleReconnect();
+          _setState(conn, WsConnectionState.disconnected);
+          _scheduleReconnect(conn);
         },
         onError: (error) {
-          _setState(WsConnectionState.disconnected);
-          _scheduleReconnect();
+          _setState(conn, WsConnectionState.disconnected);
+          _scheduleReconnect(conn);
         },
       );
 
-      _setState(WsConnectionState.connected);
-      _startPing();
+      _setState(conn, WsConnectionState.connected);
+      _startPing(conn);
     } catch (e) {
-      _setState(WsConnectionState.disconnected);
-      _scheduleReconnect();
+      _setState(conn, WsConnectionState.disconnected);
+      _scheduleReconnect(conn);
     }
   }
 
-  void _setState(WsConnectionState newState) {
-    _state = newState;
-    _stateController.add(newState);
+  void _setState(_Connection conn, WsConnectionState newState) {
+    if (conn.disposed) return;
+    conn.state = newState;
+    _stateController.add((serverUrl: conn.url, state: newState));
   }
 
-  void _scheduleReconnect() {
-    _stopPing();
-    _reconnectTimer?.cancel();
+  void _scheduleReconnect(_Connection conn) {
+    if (conn.disposed) return;
+    _stopPing(conn);
+    conn.reconnectTimer?.cancel();
     final delay = Duration(
-      seconds: _reconnectAttempts < 5
-          ? (1 << _reconnectAttempts) // 1, 2, 4, 8, 16
+      seconds: conn.reconnectAttempts < 5
+          ? (1 << conn.reconnectAttempts)
           : 16,
     );
-    _reconnectAttempts++;
-    _reconnectTimer = Timer(delay, _doConnect);
+    conn.reconnectAttempts++;
+    conn.reconnectTimer = Timer(delay, () => _doConnect(conn));
   }
 
-  void _startPing() {
-    _pingTimer?.cancel();
-    _pingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      send({'type': 'ping'});
+  void _startPing(_Connection conn) {
+    conn.pingTimer?.cancel();
+    conn.pingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      sendTo(conn.url, {'type': 'ping'});
     });
   }
 
-  void _stopPing() {
-    _pingTimer?.cancel();
-    _pingTimer = null;
+  void _stopPing(_Connection conn) {
+    conn.pingTimer?.cancel();
+    conn.pingTimer = null;
   }
 
-  void send(Map<String, dynamic> data) {
-    if (_channel != null && _state == WsConnectionState.connected) {
-      _channel!.sink.add(json.encode(data));
+  void sendTo(String serverUrl, Map<String, dynamic> data) {
+    final conn = _connections[serverUrl];
+    if (conn != null && conn.channel != null && conn.state == WsConnectionState.connected) {
+      conn.channel!.sink.add(json.encode(data));
     }
   }
 
-  void disconnect() {
-    _url = null;
-    _reconnectTimer?.cancel();
-    _stopPing();
-    _channel?.sink.close();
-    _channel = null;
-    _setState(WsConnectionState.disconnected);
+  /// Send to all connected servers
+  void sendAll(Map<String, dynamic> data) {
+    for (final conn in _connections.values) {
+      if (conn.channel != null && conn.state == WsConnectionState.connected) {
+        conn.channel!.sink.add(json.encode(data));
+      }
+    }
+  }
+
+  void disconnect(String serverUrl) {
+    final conn = _connections.remove(serverUrl);
+    if (conn == null) return;
+    conn.disposed = true;
+    conn.reconnectTimer?.cancel();
+    _stopPing(conn);
+    conn.channel?.sink.close();
+    _stateController.add((serverUrl: serverUrl, state: WsConnectionState.disconnected));
+  }
+
+  void disconnectAll() {
+    for (final url in _connections.keys.toList()) {
+      disconnect(url);
+    }
   }
 
   void dispose() {
-    disconnect();
+    disconnectAll();
     _messageController.close();
     _stateController.close();
   }
