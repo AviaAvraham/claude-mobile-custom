@@ -191,6 +191,11 @@ async function handleRequest(req, res) {
       const body = await readBody(req);
       const { session_id, project_dir } = body;
       if (!session_id) return jsonResponse(res, 400, { error: 'session_id required' });
+      // Validate session_id looks like a UUID (hooks use real UUIDs, made-up IDs will break activity status)
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session_id)) {
+        console.log(`WARNING: session_id "${session_id}" is not a UUID. Activity status may not work. Use $CLAUDE_SESSION_ID.`);
+        return jsonResponse(res, 400, { error: 'session_id must be a UUID (use $CLAUDE_SESSION_ID). Made-up IDs break activity status.' });
+      }
       state.sessions.set(session_id, {
         project_dir: project_dir || null,
         transcript_path: body.transcript_path || null,
@@ -377,15 +382,6 @@ async function handleRequest(req, res) {
       const body = await readBody(req);
       const { session_id, activity, tool_name } = body;
       if (session_id && activity) {
-        // Ignore stale "idle" if "thinking" was sent recently (within 3s)
-        const now = Date.now();
-        const key = `activity_${session_id}`;
-        if (activity === 'idle' && state[key] && (now - state[key]) < 3000) {
-          return jsonResponse(res, 200, { ok: true, skipped: true });
-        }
-        if (activity === 'thinking' || activity === 'coding') {
-          state[key] = now;
-        }
         sendToPhone({ type: 'activity', session_id, activity, tool_name: tool_name || null });
       }
       return jsonResponse(res, 200, { ok: true });

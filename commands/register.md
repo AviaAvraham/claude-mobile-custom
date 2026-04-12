@@ -14,12 +14,13 @@ Register the current Claude Code session with the running relay server and set u
    ```
    If not running, tell user to run `/mobile-custom:setup` or `/mobile-custom:restart` first.
 
-2. Register the current session:
+2. Register the current session. You MUST use `$CLAUDE_SESSION_ID` — do NOT make up your own ID. Hooks use this exact UUID internally, and a mismatch breaks activity status:
    ```bash
    curl -sf -X POST http://localhost:4090/register \
      -H "Content-Type: application/json" \
      -d "{\"session_id\":\"$CLAUDE_SESSION_ID\",\"project_dir\":\"$(pwd)\"}"
    ```
+   If `$CLAUDE_SESSION_ID` is empty, run `echo $CLAUDE_SESSION_ID` first to verify it exists.
 
 3. Set up the message monitor. Use the Monitor tool with EXACTLY this command (copy-paste, do not modify):
 

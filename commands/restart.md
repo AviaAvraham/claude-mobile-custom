@@ -15,10 +15,11 @@ Find the repo path. Look for `server/server.js` in:
 
 Then:
 
-1. Kill existing server:
+1. Kill existing server by PID (do NOT use `taskkill //F //IM node.exe` — that kills ALL node processes including Playwright):
    ```bash
-   pkill -f "node.*server.js" 2>/dev/null
-   pkill -f cloudflared 2>/dev/null
+   # Find and kill only the server process
+   ps aux | grep "node.*server.js" | grep -v grep | awk '{print $1}' | xargs kill 2>/dev/null
+   ps aux | grep cloudflared | grep -v grep | awk '{print $1}' | xargs kill 2>/dev/null
    ```
 
 2. Check for custom URL config:
