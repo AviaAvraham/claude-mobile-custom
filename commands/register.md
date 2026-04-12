@@ -30,3 +30,20 @@ Register the current Claude Code session with the running relay server and set u
    IMPORTANT: This single command does everything — tails the log, sends delivery acknowledgements (for double checkmarks), sends activity status (for thinking indicator), and outputs messages as monitor events. Do NOT call /ack-delivered separately. Do NOT set up a simpler monitor without the while loop. The ack-delivered and activity calls are embedded IN the monitor command.
 
 4. Confirm registration and show current session count from health endpoint.
+
+## Responding to phone messages
+
+When you receive a monitor event with a phone message, respond using the `/send` endpoint:
+
+```bash
+curl -sf -X POST http://localhost:4090/send \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"SESSION_ID_FROM_MESSAGE","text":"Your reply here"}'
+```
+
+Replace `SESSION_ID_FROM_MESSAGE` with the session_id from the monitor event, and `Your reply here` with your response.
+
+## Server commands handled by the server
+
+These commands are handled directly by the server when the phone sends them — no action needed from you:
+- `/usage` — server replies with usage stats automatically
