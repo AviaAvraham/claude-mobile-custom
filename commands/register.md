@@ -12,17 +12,40 @@ Register the current Claude Code session with the running relay server and set u
    ```bash
    curl -sf http://localhost:4090/health
    ```
-   If not running, tell user to run `/mobile-custom:setup` or `/mobile-custom:restart` first.
+   If not running, find the repo path (look for `server/server.js` in cwd, parents, or ask user) and start it:
+   ```bash
+   node $REPO_PATH/server/server.js &
+   ```
+   Wait for health check to pass before continuing.
 
-2. Register the current session. You MUST use `$CLAUDE_SESSION_ID` — do NOT make up your own ID. Hooks use this exact UUID internally, and a mismatch breaks activity status:
+2. Get your real session ID. Do NOT make up an ID — it MUST match what hooks send internally.
+
+   First try `$CLAUDE_SESSION_ID`:
+   ```bash
+   echo $CLAUDE_SESSION_ID
+   ```
+
+   If empty, find it from the projects folder — your session transcript is at `~/.claude/projects/<sanitized-cwd>/<session-id>.jsonl`:
+   ```bash
+   ls -t ~/.claude/projects/*//*.jsonl 2>/dev/null | head -1
+   ```
+   The filename (without .jsonl) is your session ID.
+
+   If that also fails, trigger a hook and check the server log:
+   ```bash
+   tail -1 ~/.claude/mobile-messages.log
+   ```
+   The session_id in the output is the real one.
+
+3. Register with the real session ID:
    ```bash
    curl -sf -X POST http://localhost:4090/register \
      -H "Content-Type: application/json" \
-     -d "{\"session_id\":\"$CLAUDE_SESSION_ID\",\"project_dir\":\"$(pwd)\"}"
+     -d "{\"session_id\":\"YOUR_REAL_SESSION_ID\",\"project_dir\":\"$(pwd)\"}"
    ```
-   If `$CLAUDE_SESSION_ID` is empty, run `echo $CLAUDE_SESSION_ID` first to verify it exists.
+   The server will REJECT non-UUID session IDs. If rejected, your ID is wrong.
 
-3. Set up the message monitor. Use the Monitor tool with EXACTLY this command (copy-paste, do not modify):
+4. Set up the message monitor. Use the Monitor tool with EXACTLY this command (copy-paste, do not modify):
 
    command: `tail -f ~/.claude/mobile-messages.log | grep --line-buffered "PHONE_MSG" | sed -u 's/^PHONE_MSG[^:]*://' | while IFS= read -r line; do msg_id=$(echo "$line" | grep -o '"msg_id":"[^"]*"' | sed 's/"msg_id":"//;s/"//'); session_id=$(echo "$line" | grep -o '"session_id":"[^"]*"' | sed 's/"session_id":"//;s/"//'); if [ -n "$msg_id" ]; then curl -sf -X POST http://localhost:4090/ack-delivered -H "Content-Type: application/json" -d "{\"msg_id\":\"$msg_id\"}" >/dev/null 2>&1; fi; if [ -n "$session_id" ]; then curl -sf -X POST http://localhost:4090/activity -H "Content-Type: application/json" -d "{\"session_id\":\"$session_id\",\"activity\":\"thinking\"}" >/dev/null 2>&1; fi; echo "$line"; done`
    persistent: true
@@ -30,7 +53,7 @@ Register the current Claude Code session with the running relay server and set u
 
    IMPORTANT: This single command does everything — tails the log, sends delivery acknowledgements (for double checkmarks), sends activity status (for thinking indicator), and outputs messages as monitor events. Do NOT call /ack-delivered separately. Do NOT set up a simpler monitor without the while loop. The ack-delivered and activity calls are embedded IN the monitor command.
 
-4. Confirm registration and show current session count from health endpoint.
+5. Confirm registration and show current session count from health endpoint.
 
 ## Behavior after registration
 
