@@ -65,6 +65,10 @@ const hooks = {
   Stop: [{
     matcher: '',
     hooks: [{ type: 'command', command: 'bash ' + repoDir + '/server/hooks/stop-hook.sh', timeout: 130 }]
+  }],
+  SessionStart: [{
+    matcher: '',
+    hooks: [{ type: 'command', command: 'bash ' + repoDir + '/server/hooks/session-start-hook.sh', timeout: 5 }]
   }]
 };
 
