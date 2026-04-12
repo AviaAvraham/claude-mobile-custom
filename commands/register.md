@@ -33,11 +33,11 @@ Register the current Claude Code session with the running relay server and set u
 
 ## Behavior after registration
 
-Once registered with the monitor running, you are connected to a phone user via the relay server. When monitor events arrive with phone messages:
+Once registered with the monitor running, you are connected to a phone user via the relay server.
 
-- **Always reply via `/send` endpoint** (see below), NOT by outputting text to the CLI. The phone user cannot see your CLI output — they only see messages sent through `/send`.
-- Treat it like a chat. Read the message, respond via `/send`.
-- You can still do normal work (edit files, run commands) while chatting. The phone user sees your activity status (thinking/coding) automatically via hooks.
+- When a message comes from the **phone** (via monitor event), reply via `/send` endpoint (see below). The phone user cannot see CLI output.
+- When a message comes from the **CLI** (the user typing locally), reply normally on the CLI.
+- You can do normal work (edit files, run commands) while chatting. The phone user sees your activity status (thinking/coding) automatically via hooks.
 - If the phone user sends a command like `/usage`, the server handles it automatically — no action needed from you.
 
 ## Responding to phone messages
