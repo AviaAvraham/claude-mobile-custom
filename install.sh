@@ -76,13 +76,11 @@ for (const [event, config] of Object.entries(hooks)) {
   if (!settings.hooks[event]) {
     settings.hooks[event] = config;
   } else {
-    // Check if our hook is already there
-    const existing = settings.hooks[event].some(h =>
-      h.hooks?.some(hh => hh.command?.includes('claude-mobile-custom'))
+    // Remove existing mobile-custom hooks, then add fresh ones
+    settings.hooks[event] = settings.hooks[event].filter(h =>
+      !h.hooks?.some(hh => hh.command?.includes('claude-mobile-custom'))
     );
-    if (!existing) {
-      settings.hooks[event].push(...config);
-    }
+    settings.hooks[event].push(...config);
   }
 }
 
