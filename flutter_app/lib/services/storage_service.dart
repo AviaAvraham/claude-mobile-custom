@@ -25,8 +25,8 @@ class StorageService {
 
   Future<void> saveServer(ServerConfig config) async {
     final servers = getSavedServers();
-    // Replace existing with same URL, or add new
-    final index = servers.indexWhere((s) => s.url == config.url);
+    // Replace existing with same serverId (same machine), or add new
+    final index = servers.indexWhere((s) => s.serverId == config.serverId);
     if (index >= 0) {
       servers[index] = config;
     } else {

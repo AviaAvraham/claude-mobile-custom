@@ -4,11 +4,13 @@ class ServerConfig {
   final String name;
   final String url;
   final String token;
+  final String serverId;
 
   const ServerConfig({
     required this.name,
     required this.url,
     required this.token,
+    required this.serverId,
   });
 
   factory ServerConfig.fromQrJson(String jsonStr) {
@@ -17,6 +19,7 @@ class ServerConfig {
       name: map['name'] as String? ?? 'Unknown',
       url: map['url'] as String,
       token: map['token'] as String,
+      serverId: map['serverId'] as String? ?? map['name'] as String? ?? 'unknown',
     );
   }
 
@@ -25,6 +28,7 @@ class ServerConfig {
       name: map['name'] as String,
       url: map['url'] as String,
       token: map['token'] as String,
+      serverId: map['serverId'] as String? ?? map['name'] as String? ?? 'unknown',
     );
   }
 
@@ -32,6 +36,7 @@ class ServerConfig {
         'name': name,
         'url': url,
         'token': token,
+        'serverId': serverId,
       };
 
   String get wsUrl {
@@ -43,8 +48,8 @@ class ServerConfig {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ServerConfig && url == other.url && token == other.token;
+      other is ServerConfig && serverId == other.serverId;
 
   @override
-  int get hashCode => url.hashCode ^ token.hashCode;
+  int get hashCode => serverId.hashCode;
 }

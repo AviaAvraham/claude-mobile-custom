@@ -8,11 +8,29 @@ const QRCode = require('qrcode');
 const { start: startTunnel, getUrl: getTunnelUrl, stop: stopTunnel } = require('./cloudflared');
 
 const PORT = 4090;
+const path = require('path');
+
+// ── Persistent identity ────────────────────────────────────────────────────────
+
+const ID_FILE = path.join(os.homedir(), '.claude', 'mobile-server-identity.json');
+
+function loadOrCreateIdentity() {
+  try {
+    const data = JSON.parse(fs.readFileSync(ID_FILE, 'utf8'));
+    if (data.serverId && data.token) return data;
+  } catch {}
+  const identity = { serverId: crypto.randomUUID(), token: crypto.randomUUID() };
+  fs.mkdirSync(path.dirname(ID_FILE), { recursive: true });
+  fs.writeFileSync(ID_FILE, JSON.stringify(identity, null, 2));
+  return identity;
+}
+
+const identity = loadOrCreateIdentity();
 
 // ── State ──────────────────────────────────────────────────────────────────────
 
 const state = {
-  token: crypto.randomUUID(),
+  token: identity.token,
   tunnelUrl: null,
   sessions: new Map(),          // session_id → {project_dir, transcript_path, registered_at}
   phoneWs: null,                // single connected phone WebSocket
@@ -125,7 +143,7 @@ async function handleRequest(req, res) {
         <body><div class="card"><h2>Waiting for tunnel...</h2><p>This page will refresh automatically.</p></div></body></html>`);
     }
 
-    const payload = JSON.stringify({ url: tunnelUrl, token: state.token, name: os.hostname() });
+    const payload = JSON.stringify({ url: tunnelUrl, token: state.token, name: os.hostname(), serverId: identity.serverId });
     const qrDataUrl = await QRCode.toDataURL(payload, { width: 400, margin: 2, color: { dark: '#e0e0e0', light: '#16213e' } });
 
     return htmlResponse(res, 200, `
@@ -407,7 +425,22 @@ function deliverMessageToSession(sessionId, text, msgId) {
   state.pendingMessages.get(sessionId).push({ text, timestamp: Date.now() });
   // Ack: message received by server (single check)
   sendToPhone({ type: 'msg_ack', msg_id: msgId, status: 'server' });
-  console.log(`PHONE_MSG:${JSON.stringify({session_id: sessionId, text, msg_id: msgId})}`);
+  const payload = JSON.stringify({session_id: sessionId, text, msg_id: msgId});
+  const maxLen = 450;
+  if (payload.length <= maxLen) {
+    console.log(`PHONE_MSG:${payload}`);
+  } else {
+    // Split into chunks so Monitor doesn't truncate
+    const chunks = [];
+    for (let i = 0; i < payload.length; i += maxLen) {
+      chunks.push(payload.substring(i, i + maxLen));
+    }
+    console.log(`PHONE_MSG_START:${chunks.length}`);
+    for (const chunk of chunks) {
+      console.log(`PHONE_MSG_CHUNK:${chunk}`);
+    }
+    console.log('PHONE_MSG_END');
+  }
 }
 
 // ── WebSocket ──────────────────────────────────────────────────────────────────
@@ -549,15 +582,21 @@ async function main() {
     console.log(`Health: http://localhost:${PORT}/health`);
   });
 
-  // Start cloudflare tunnel
-  try {
-    console.log('Starting Cloudflare tunnel...');
-    const tunnelUrl = await startTunnel(PORT);
-    state.tunnelUrl = tunnelUrl;
-    console.log(`Tunnel URL: ${tunnelUrl}`);
-  } catch (e) {
-    console.error('Failed to start tunnel:', e.message);
-    console.log('Server running in local-only mode. Use /pair on localhost to get QR code once tunnel is ready.');
+  // Use custom URL if provided, otherwise start cloudflare quick tunnel
+  const customUrl = process.env.TUNNEL_URL || process.argv.find(a => a.startsWith('--url='))?.split('=')[1];
+  if (customUrl) {
+    state.tunnelUrl = customUrl;
+    console.log(`Using custom URL: ${customUrl}`);
+  } else {
+    try {
+      console.log('Starting Cloudflare tunnel...');
+      const tunnelUrl = await startTunnel(PORT);
+      state.tunnelUrl = tunnelUrl;
+      console.log(`Tunnel URL: ${tunnelUrl}`);
+    } catch (e) {
+      console.error('Failed to start tunnel:', e.message);
+      console.log('Server running in local-only mode. Use /pair on localhost to get QR code once tunnel is ready.');
+    }
   }
 
   // Graceful shutdown
