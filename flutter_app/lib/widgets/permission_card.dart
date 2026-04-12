@@ -122,7 +122,10 @@ class _PermissionCardState extends State<PermissionCard> {
             ),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: () => setState(() => _expanded = !_expanded),
+              onTap: () {
+                if (!_expanded) FocusScope.of(context).unfocus();
+                setState(() => _expanded = !_expanded);
+              },
               child: Row(
                 children: [
                   Icon(
