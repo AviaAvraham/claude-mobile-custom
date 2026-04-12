@@ -381,7 +381,7 @@ async function handleRequest(req, res) {
     try {
       const body = await readBody(req);
       const { session_id, activity, tool_name } = body;
-      if (session_id && activity) {
+      if (session_id && activity && state.sessions.has(session_id)) {
         sendToPhone({ type: 'activity', session_id, activity, tool_name: tool_name || null });
       }
       return jsonResponse(res, 200, { ok: true });
