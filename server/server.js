@@ -512,24 +512,30 @@ function handlePhoneMessage(msg) {
       const { session_id, text, msg_id } = msg;
       if (!session_id || !text) return;
 
-      // Handle /usage command directly
+      // Handle /usage command — run Python script, send output to phone
       if (text.trim() === '/usage') {
         sendToPhone({ type: 'msg_ack', msg_id, status: 'delivered' });
-        if (state.usage) {
-          const u = state.usage;
-          const fiveReset = u.five_hour_resets ? new Date(u.five_hour_resets * 1000).toLocaleTimeString() : '?';
-          const sevenReset = u.seven_day_resets ? new Date(u.seven_day_resets * 1000).toLocaleDateString() : '?';
-          const bar = (pct) => {
-            const filled = Math.round(pct / 5);
-            return '\u2588'.repeat(filled) + '\u2591'.repeat(20 - filled) + ` ${pct}%`;
-          };
-          sendToPhone({
-            type: 'message', session_id, from: 'assistant',
-            text: `**Usage**\n\n5-hour:  ${bar(u.five_hour_pct)}\nResets: ${fiveReset}\n\n7-day:   ${bar(u.seven_day_pct)}\nResets: ${sevenReset}\n\nContext: ${u.context_pct || 0}%`,
+        const { execFile } = require('child_process');
+        const scriptPath = path.join(__dirname, '..', 'scripts', 'claude_usage.py');
+        const pythonPaths = ['python3', 'python', 'py',
+          path.join(os.homedir(), 'AppData/Local/Programs/Python/Python312/python.exe'),
+          path.join(os.homedir(), 'AppData/Local/Programs/Python/Python313/python.exe'),
+        ];
+        const tryPython = (paths) => {
+          if (!paths.length) {
+            sendToPhone({ type: 'message', session_id, from: 'assistant', text: 'Python not found. Install Python to use /usage.' });
+            return;
+          }
+          execFile(paths[0], [scriptPath, '--short'], { timeout: 15000 }, (err, stdout) => {
+            if (err && err.code === 'ENOENT') return tryPython(paths.slice(1));
+            if (err) {
+              sendToPhone({ type: 'message', session_id, from: 'assistant', text: 'Usage error: ' + err.message });
+              return;
+            }
+            sendToPhone({ type: 'message', session_id, from: 'assistant', text: stdout.trim() });
           });
-        } else {
-          sendToPhone({ type: 'message', session_id, from: 'assistant', text: 'No usage data yet. Wait for the status line to refresh.' });
-        }
+        };
+        tryPython(pythonPaths);
         return;
       }
 
