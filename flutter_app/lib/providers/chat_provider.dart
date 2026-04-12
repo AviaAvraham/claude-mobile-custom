@@ -77,8 +77,9 @@ class ChatProvider extends ChangeNotifier {
         final activity = msg['activity'] as String?;
         if (sessionId != null && activity != null) {
           if (serverUrl != null) _sessionServer[sessionId] = serverUrl;
+          final old = _activityStatus[sessionId];
           _activityStatus[sessionId] = activity;
-          notifyListeners();
+          if (old != activity) notifyListeners();
         }
       } else if (type == 'sessions' && serverUrl != null) {
         // Learn session -> server mappings

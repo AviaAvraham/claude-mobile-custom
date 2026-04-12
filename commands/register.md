@@ -45,9 +45,11 @@ Register the current Claude Code session with the running relay server and set u
    ```
    The server will REJECT non-UUID session IDs. If rejected, your ID is wrong.
 
-4. Set up the message monitor. Use the Monitor tool with EXACTLY this command (copy-paste, do not modify):
+4. Set up the message monitor. Replace `YOUR_SESSION_ID` with the real UUID from step 2, then use the Monitor tool with this command:
 
-   command: `tail -f ~/.claude/mobile-messages.log | grep --line-buffered "PHONE_MSG" | sed -u 's/^PHONE_MSG[^:]*://' | while IFS= read -r line; do msg_id=$(echo "$line" | grep -o '"msg_id":"[^"]*"' | sed 's/"msg_id":"//;s/"//'); session_id=$(echo "$line" | grep -o '"session_id":"[^"]*"' | sed 's/"session_id":"//;s/"//'); if [ -n "$msg_id" ]; then curl -sf -X POST http://localhost:4090/ack-delivered -H "Content-Type: application/json" -d "{\"msg_id\":\"$msg_id\"}" >/dev/null 2>&1; fi; if [ -n "$session_id" ]; then curl -sf -X POST http://localhost:4090/activity -H "Content-Type: application/json" -d "{\"session_id\":\"$session_id\",\"activity\":\"thinking\"}" >/dev/null 2>&1; fi; echo "$line"; done`
+   command: `tail -f ~/.claude/mobile-messages.log | grep --line-buffered "YOUR_SESSION_ID" | sed -u 's/^PHONE_MSG[^:]*://' | while IFS= read -r line; do msg_id=$(echo "$line" | grep -o '"msg_id":"[^"]*"' | sed 's/"msg_id":"//;s/"//'); session_id=$(echo "$line" | grep -o '"session_id":"[^"]*"' | sed 's/"session_id":"//;s/"//'); if [ -n "$msg_id" ]; then curl -sf -X POST http://localhost:4090/ack-delivered -H "Content-Type: application/json" -d "{\"msg_id\":\"$msg_id\"}" >/dev/null 2>&1; fi; if [ -n "$session_id" ]; then curl -sf -X POST http://localhost:4090/activity -H "Content-Type: application/json" -d "{\"session_id\":\"$session_id\",\"activity\":\"thinking\"}" >/dev/null 2>&1; fi; echo "$line"; done`
+
+   CRITICAL: The grep MUST filter by YOUR session ID. Without it, your monitor will interfere with other sessions' activity status on the same machine.
    persistent: true
    description: "Phone messages from Claude Mobile"
 
