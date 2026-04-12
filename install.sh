@@ -82,14 +82,8 @@ for (const [event, config] of Object.entries(hooks)) {
   }
 }
 
-// Add statusLine if not present
-if (!settings.statusLine) {
-  settings.statusLine = {
-    type: 'command',
-    command: 'bash ' + repoDir + '/server/hooks/statusline.sh',
-    refreshInterval: 30
-  };
-}
+// NOTE: statusLine is NOT added automatically. If the user wants /usage
+// support from phone, they can configure it manually via /mobile-custom:configure
 
 fs.writeFileSync(path, JSON.stringify(settings, null, 2));
 console.log('Settings updated.');
