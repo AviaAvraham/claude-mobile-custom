@@ -583,7 +583,14 @@ async function main() {
   });
 
   // Use custom URL if provided, otherwise start cloudflare quick tunnel
-  const customUrl = process.env.TUNNEL_URL || process.argv.find(a => a.startsWith('--url='))?.split('=')[1];
+  // Check env, CLI arg, or config file for custom tunnel URL
+  let customUrl = process.env.TUNNEL_URL || process.argv.find(a => a.startsWith('--url='))?.split('=')[1];
+  if (!customUrl) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude', 'mobile-server-config.json'), 'utf8'));
+      if (cfg.tunnelUrl) customUrl = cfg.tunnelUrl;
+    } catch {}
+  }
   if (customUrl) {
     state.tunnelUrl = customUrl;
     console.log(`Using custom URL: ${customUrl}`);
