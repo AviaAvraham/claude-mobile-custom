@@ -9,6 +9,17 @@ if [ -z "$SESSION_ID" ]; then
   exit 1
 fi
 
+# Check if server is running, start if not
+if ! curl -sf --connect-timeout 1 --max-time 2 http://localhost:4090/health >/dev/null 2>&1; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+  echo "Server not running, starting..."
+  node "$SCRIPT_DIR/server/server.js" &
+  for i in $(seq 1 10); do
+    curl -sf --connect-timeout 1 --max-time 1 http://localhost:4090/health >/dev/null 2>&1 && break
+    sleep 1
+  done
+fi
+
 # Write PowerShell script to temp file
 PS_SCRIPT=/tmp/find_claude_$$.ps1
 cat > "$PS_SCRIPT" << PSEOF
@@ -33,6 +44,6 @@ if [ -z "$CLAUDE_PID" ] || echo "$CLAUDE_PID" | grep -q '[^0-9]'; then
   CLAUDE_PID=""
 fi
 
-curl -sf -X POST http://localhost:4090/register \
+curl -sf --connect-timeout 2 --max-time 5 -X POST http://localhost:4090/register \
   -H "Content-Type: application/json" \
   -d "{\"session_id\":\"$SESSION_ID\",\"project_dir\":\"$(pwd)\",\"pid\":${CLAUDE_PID:-null}}"
