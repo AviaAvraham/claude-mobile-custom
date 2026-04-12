@@ -10,6 +10,15 @@ const { start: startTunnel, getUrl: getTunnelUrl, stop: stopTunnel } = require('
 const PORT = 4090;
 const path = require('path');
 
+// ── Message log file (fixed path, survives server restarts) ────────────────────
+const MSG_LOG = path.join(os.homedir(), '.claude', 'mobile-messages.log');
+// Truncate on startup
+fs.writeFileSync(MSG_LOG, '', { flag: 'w' });
+
+function logMessage(line) {
+  fs.appendFileSync(MSG_LOG, line + '\n');
+}
+
 // ── Persistent identity ────────────────────────────────────────────────────────
 
 const ID_FILE = path.join(os.homedir(), '.claude', 'mobile-server-identity.json');
@@ -428,18 +437,18 @@ function deliverMessageToSession(sessionId, text, msgId) {
   const payload = JSON.stringify({session_id: sessionId, text, msg_id: msgId});
   const maxLen = 450;
   if (payload.length <= maxLen) {
-    console.log(`PHONE_MSG:${payload}`);
+    logMessage(`PHONE_MSG:${payload}`);
   } else {
     // Split into chunks so Monitor doesn't truncate
     const chunks = [];
     for (let i = 0; i < payload.length; i += maxLen) {
       chunks.push(payload.substring(i, i + maxLen));
     }
-    console.log(`PHONE_MSG_START:${chunks.length}`);
+    logMessage(`PHONE_MSG_START:${chunks.length}`);
     for (const chunk of chunks) {
-      console.log(`PHONE_MSG_CHUNK:${chunk}`);
+      logMessage(`PHONE_MSG_CHUNK:${chunk}`);
     }
-    console.log('PHONE_MSG_END');
+    logMessage('PHONE_MSG_END');
   }
 }
 
