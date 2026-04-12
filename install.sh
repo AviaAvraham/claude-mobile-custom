@@ -4,8 +4,17 @@
 
 set -e
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-SETTINGS_FILE="$HOME/.claude/settings.json"
+# Convert paths for Windows (Git Bash uses /c/Users but Node needs C:/Users)
+to_native_path() {
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -w "$1" | sed 's/\\/\//g'
+  else
+    echo "$1"
+  fi
+}
+
+REPO_DIR="$(to_native_path "$(cd "$(dirname "$0")" && pwd)")"
+SETTINGS_FILE="$(to_native_path "$HOME/.claude/settings.json")"
 
 echo "Installing Claude Mobile Custom..."
 echo "Repo: $REPO_DIR"
@@ -17,6 +26,7 @@ cd "$REPO_DIR/server" && npm install
 # 2. Register plugin in settings.json
 echo "Registering plugin..."
 if [ ! -f "$SETTINGS_FILE" ]; then
+  mkdir -p "$(dirname "$SETTINGS_FILE")"
   echo '{}' > "$SETTINGS_FILE"
 fi
 
