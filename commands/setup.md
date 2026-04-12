@@ -34,11 +34,6 @@ Then:
 
 6. Wait for: `curl -sf http://localhost:4090/health`
 
-7. Register session:
-   ```bash
-   curl -sf -X POST http://localhost:4090/register \
-     -H "Content-Type: application/json" \
-     -d "{\"session_id\":\"$CLAUDE_SESSION_ID\",\"project_dir\":\"$(pwd)\"}"
-   ```
+7. Run `/mobile-custom:register` to register the session and set up the message monitor.
 
 8. Tell user to open http://localhost:4090/pair and scan QR with phone.
