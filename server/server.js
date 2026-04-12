@@ -381,8 +381,12 @@ async function handleRequest(req, res) {
     try {
       const body = await readBody(req);
       const { session_id, activity, tool_name } = body;
-      if (session_id && activity && state.sessions.has(session_id)) {
-        sendToPhone({ type: 'activity', session_id, activity, tool_name: tool_name || null });
+      if (session_id && activity) {
+        if (state.sessions.has(session_id)) {
+          sendToPhone({ type: 'activity', session_id, activity, tool_name: tool_name || null });
+        } else {
+          console.log(`Activity BLOCKED for unregistered session ${session_id} (${activity})`);
+        }
       }
       return jsonResponse(res, 200, { ok: true });
     } catch (e) {
