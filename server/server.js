@@ -189,19 +189,18 @@ async function handleRequest(req, res) {
     if (!isLocalhost(req)) return jsonResponse(res, 403, { error: 'localhost only' });
     try {
       const body = await readBody(req);
-      const { session_id, project_dir } = body;
+      const { session_id, project_dir, pid } = body;
       if (!session_id) return jsonResponse(res, 400, { error: 'session_id required' });
-      // Validate session_id looks like a UUID (hooks use real UUIDs, made-up IDs will break activity status)
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session_id)) {
-        console.log(`WARNING: session_id "${session_id}" is not a UUID. Activity status may not work. Use $CLAUDE_SESSION_ID.`);
-        return jsonResponse(res, 400, { error: 'session_id must be a UUID (use $CLAUDE_SESSION_ID). Made-up IDs break activity status.' });
+        return jsonResponse(res, 400, { error: 'session_id must be a UUID.' });
       }
       state.sessions.set(session_id, {
         project_dir: project_dir || null,
         transcript_path: body.transcript_path || null,
         registered_at: new Date().toISOString(),
+        pid: pid || null,
       });
-      console.log(`Session registered: ${session_id} (${project_dir || 'unknown'})`);
+      console.log(`Session registered: ${session_id} (${project_dir || 'unknown'}) pid=${pid || 'none'}`);
       sendToPhone({ type: 'sessions', sessions: getSessionsList() });
       return jsonResponse(res, 200, { ok: true });
     } catch (e) {
@@ -614,6 +613,21 @@ async function main() {
       console.log('Server running in local-only mode. Use /pair on localhost to get QR code once tunnel is ready.');
     }
   }
+
+  // Liveness check — every 30s, remove sessions whose PID is dead
+  setInterval(() => {
+    for (const [id, session] of state.sessions) {
+      if (session.pid) {
+        try {
+          process.kill(session.pid, 0);
+        } catch {
+          state.sessions.delete(id);
+          console.log(`Session reaped (PID ${session.pid} dead): ${id}`);
+          sendToPhone({ type: 'sessions', sessions: getSessionsList() });
+        }
+      }
+    }
+  }, 30000);
 
   // Graceful shutdown
   const shutdown = () => {
