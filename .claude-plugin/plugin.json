@@ -1,0 +1,7 @@
+{
+  "name": "mobile-custom",
+  "description": "Control Claude Code sessions from your phone. Relay server with Cloudflare tunnel, Flutter mobile app, permissions, activity status, and usage tracking.",
+  "author": {
+    "name": "Avia Avraham"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "local-plugins",
+  "plugins": [
+    {
+      "name": "mobile-custom",
+      "source": "./",
+      "description": "Control Claude Code sessions from your phone"
+    }
+  ],
+  "owner": {
+    "name": "Avia Avraham"
+  }
+}
