@@ -9,28 +9,25 @@ First-time setup for Claude Mobile relay server.
 
 ## Instructions
 
-Find the repo path. Look for `server/server.js` in:
-1. Current working directory and parents
-2. `C:/CompilesNew/claude-mobile-custom`
-3. Ask user if not found
+The repo path is available as `${CLAUDE_PLUGIN_ROOT}` — use that directly.
 
 Then:
 
 1. Check Node.js: `node --version`
 
-2. Install deps: `cd $REPO_PATH/server && npm install`
+2. Install deps: `cd ${CLAUDE_PLUGIN_ROOT}/server && npm install`
 
-3. Add hooks to `~/.claude/settings.json` if not already present (adjust paths to `$REPO_PATH`):
-   - `PermissionRequest` → `bash $REPO_PATH/server/hooks/permission-hook.sh` (timeout: 310)
-   - `PreToolUse` → `bash $REPO_PATH/server/hooks/activity-hook.sh` (timeout: 3, async: true)
-   - `Stop` → `bash $REPO_PATH/server/hooks/stop-hook.sh` (timeout: 130)
-   - `statusLine` → `bash $REPO_PATH/server/hooks/statusline.sh` (refreshInterval: 30)
+3. Add hooks to `~/.claude/settings.json` if not already present (adjust paths to `${CLAUDE_PLUGIN_ROOT}`):
+   - `PermissionRequest` → `bash ${CLAUDE_PLUGIN_ROOT}/server/hooks/permission-hook.sh` (timeout: 310)
+   - `PreToolUse` → `bash ${CLAUDE_PLUGIN_ROOT}/server/hooks/activity-hook.sh` (timeout: 3, async: true)
+   - `Stop` → `bash ${CLAUDE_PLUGIN_ROOT}/server/hooks/stop-hook.sh` (timeout: 130)
+   - `statusLine` → `bash ${CLAUDE_PLUGIN_ROOT}/server/hooks/statusline.sh` (refreshInterval: 30)
 
 4. If `--url=` provided: `echo '{"tunnelUrl":"THE_URL"}' > ~/.claude/mobile-server-config.json`
 
 5. Start server in background:
-   - With custom URL: `TUNNEL_URL=THE_URL node $REPO_PATH/server/server.js &`
-   - Without: `node $REPO_PATH/server/server.js &`
+   - With custom URL: `TUNNEL_URL=THE_URL node ${CLAUDE_PLUGIN_ROOT}/server/server.js &`
+   - Without: `node ${CLAUDE_PLUGIN_ROOT}/server/server.js &`
 
 6. Wait for: `curl -sf http://localhost:4090/health`
 

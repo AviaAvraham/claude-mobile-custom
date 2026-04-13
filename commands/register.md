@@ -5,7 +5,7 @@ description: "Register current session with the relay server and set up message 
 The SessionStart hook printed your session_id at the top of this conversation. Find that UUID and run:
 
 ```bash
-bash C:/CompilesNew/claude-mobile-custom/scripts/register.sh <SESSION_ID>
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/register.sh <SESSION_ID>
 ```
 
 Then set up the message monitor using the Monitor tool. Replace `SESSION_ID` with the same UUID:

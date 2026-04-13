@@ -8,10 +8,7 @@ Kill and restart the relay server process + cloudflared tunnel.
 
 ## Instructions
 
-Find the repo path. Look for `server/server.js` in:
-1. Current working directory and parents
-2. `C:/CompilesNew/claude-mobile-custom`
-3. Ask user if not found
+The repo path is available as `${CLAUDE_PLUGIN_ROOT}` — use that directly.
 
 Then:
 
@@ -28,8 +25,8 @@ Then:
    ```
 
 3. Start server:
-   - If custom URL configured: `TUNNEL_URL=THE_URL node $REPO_PATH/server/server.js &`
-   - Otherwise: `node $REPO_PATH/server/server.js &`
+   - If custom URL configured: `TUNNEL_URL=THE_URL node ${CLAUDE_PLUGIN_ROOT}/server/server.js &`
+   - Otherwise: `node ${CLAUDE_PLUGIN_ROOT}/server/server.js &`
 
 4. Wait for: `curl -sf http://localhost:4090/health`
 
