@@ -14,9 +14,13 @@ command: `tail -f ~/.claude/mobile-messages.log | grep --line-buffered "SESSION_
 persistent: true
 description: "Phone messages from Claude Mobile"
 
-When you receive a monitor event with a phone message, respond using:
+When you receive a monitor event with a phone message, respond by writing the JSON to a file and piping via stdin. **Do NOT pass JSON inline with `-d` or `--data-binary` directly** — on Git Bash for Windows, command-line encoding corrupts emojis and non-ASCII characters into `?`. Using a file or stdin preserves UTF-8.
+
 ```bash
+cat > /tmp/reply.json <<'EOF'
+{"session_id":"SESSION_ID","text":"Your reply here 🎉 שלום"}
+EOF
 curl -sf -X POST http://localhost:4090/send \
-  -H "Content-Type: application/json" \
-  -d '{"session_id":"SESSION_ID","text":"Your reply here"}'
+  -H "Content-Type: application/json; charset=utf-8" \
+  --data-binary @/tmp/reply.json
 ```
