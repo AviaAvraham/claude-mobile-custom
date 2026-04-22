@@ -1,6 +1,8 @@
 #!/bin/bash
 # Claude Mobile Custom - Install Script
 # Run this after cloning the repo: bash install.sh
+# Copies plugin files to a stable location (~/.claude-mobile-custom/) so the
+# install doesn't depend on where you cloned the repo.
 
 set -e
 
@@ -13,17 +15,29 @@ to_native_path() {
   fi
 }
 
-REPO_DIR="$(to_native_path "$(cd "$(dirname "$0")" && pwd)")"
+SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
+INSTALL_DIR_UNIX="$HOME/.claude-mobile-custom"
+INSTALL_DIR="$(to_native_path "$INSTALL_DIR_UNIX")"
 SETTINGS_FILE="$(to_native_path "$HOME/.claude/settings.json")"
 
 echo "Installing Claude Mobile Custom..."
-echo "Repo: $REPO_DIR"
+echo "  Source: $SOURCE_DIR"
+echo "  Install: $INSTALL_DIR"
 
-# 1. Install server dependencies
+# 1. Copy plugin files to stable install location
+echo "Copying files..."
+mkdir -p "$INSTALL_DIR_UNIX"
+for d in server commands scripts .claude-plugin; do
+  [ -d "$SOURCE_DIR/$d" ] || continue
+  rm -rf "$INSTALL_DIR_UNIX/$d"
+  cp -r "$SOURCE_DIR/$d" "$INSTALL_DIR_UNIX/$d"
+done
+
+# 2. Install server dependencies in the install location
 echo "Installing server dependencies..."
-cd "$REPO_DIR/server" && npm install
+cd "$INSTALL_DIR_UNIX/server" && npm install
 
-# 2. Register plugin in settings.json
+# 3. Register plugin in settings.json
 echo "Registering plugin..."
 if [ ! -f "$SETTINGS_FILE" ]; then
   mkdir -p "$(dirname "$SETTINGS_FILE")"
@@ -34,15 +48,15 @@ fi
 node -e "
 const fs = require('fs');
 const path = '$SETTINGS_FILE';
-const repoDir = '${REPO_DIR}'.replace(/\\\\/g, '/');
+const installDir = '${INSTALL_DIR}'.replace(/\\\\/g, '/');
 const settings = JSON.parse(fs.readFileSync(path, 'utf8'));
 
-// Add marketplace
+// Add marketplace pointing at stable install dir
 if (!settings.extraKnownMarketplaces) settings.extraKnownMarketplaces = {};
 settings.extraKnownMarketplaces['local-plugins'] = {
   source: {
     source: 'directory',
-    path: repoDir
+    path: installDir
   }
 };
 
@@ -50,25 +64,25 @@ settings.extraKnownMarketplaces['local-plugins'] = {
 if (!settings.enabledPlugins) settings.enabledPlugins = {};
 settings.enabledPlugins['mobile-custom@local-plugins'] = true;
 
-// Add hooks if not present
+// Add hooks
 if (!settings.hooks) settings.hooks = {};
 
 const hooks = {
   PermissionRequest: [{
     matcher: '',
-    hooks: [{ type: 'command', command: 'bash ' + repoDir + '/server/hooks/permission-hook.sh', timeout: 310 }]
+    hooks: [{ type: 'command', command: 'bash ' + installDir + '/server/hooks/permission-hook.sh', timeout: 310 }]
   }],
   PreToolUse: [{
     matcher: '',
-    hooks: [{ type: 'command', command: 'bash ' + repoDir + '/server/hooks/activity-hook.sh', timeout: 3, async: true }]
+    hooks: [{ type: 'command', command: 'bash ' + installDir + '/server/hooks/activity-hook.sh', timeout: 3, async: true }]
   }],
   Stop: [{
     matcher: '',
-    hooks: [{ type: 'command', command: 'bash ' + repoDir + '/server/hooks/stop-hook.sh', timeout: 130 }]
+    hooks: [{ type: 'command', command: 'bash ' + installDir + '/server/hooks/stop-hook.sh', timeout: 130 }]
   }],
   SessionStart: [{
     matcher: '',
-    hooks: [{ type: 'command', command: 'bash ' + repoDir + '/server/hooks/session-start-hook.sh', timeout: 5 }]
+    hooks: [{ type: 'command', command: 'bash ' + installDir + '/server/hooks/session-start-hook.sh', timeout: 5 }]
   }]
 };
 
@@ -76,7 +90,7 @@ for (const [event, config] of Object.entries(hooks)) {
   if (!settings.hooks[event]) {
     settings.hooks[event] = config;
   } else {
-    // Remove existing mobile-custom hooks, then add fresh ones
+    // Remove any existing mobile-custom hooks (match old paths or new), then add fresh ones
     settings.hooks[event] = settings.hooks[event].filter(h =>
       !h.hooks?.some(hh => hh.command?.includes('claude-mobile-custom'))
     );
@@ -92,7 +106,7 @@ console.log('Settings updated.');
 "
 
 echo ""
-echo "Done! Restart Claude Code, then run:"
-echo "  /mobile-custom:setup"
+echo "Done! You can now delete the cloned repo — the plugin is installed at:"
+echo "  $INSTALL_DIR"
 echo ""
-echo "This will start the server and show the pairing QR code."
+echo "Restart Claude Code, then run: /mobile-custom:setup"
