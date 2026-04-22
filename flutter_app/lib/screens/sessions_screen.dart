@@ -5,6 +5,7 @@ import '../providers/server_provider.dart';
 import '../providers/permission_provider.dart';
 import '../providers/chat_provider.dart';
 import '../services/websocket_service.dart' show WsConnectionState;
+import '../widgets/context_menu.dart';
 import 'chat_screen.dart';
 
 class SessionsScreen extends StatelessWidget {
@@ -18,7 +19,7 @@ class SessionsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(server.name),
+        title: Text(server.displayName),
         actions: [
           Consumer<PermissionProvider>(
             builder: (_, permProvider, __) {
@@ -102,9 +103,13 @@ class SessionsScreen extends StatelessWidget {
                   .length;
               final unread = chatProvider.getUnread(session.id);
 
+              Offset longPressPosition = Offset.zero;
+
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
+                child: GestureDetector(
+                  onLongPressStart: (d) => longPressPosition = d.globalPosition,
+                  child: ListTile(
                   leading: CircleAvatar(
                     backgroundColor: session.isWaiting
                         ? Colors.green.shade700
@@ -155,11 +160,87 @@ class SessionsScreen extends StatelessWidget {
                       chatProvider.setActiveSession(null);
                     });
                   },
+                  onLongPress: () => _showSessionMenu(context, longPressPosition, provider, session),
+                ),
                 ),
               );
             },
           );
         },
+      ),
+    );
+  }
+
+  void _showSessionMenu(BuildContext context, Offset position, ServerProvider provider, session) {
+    showContextMenu(
+      context: context,
+      globalPosition: position,
+      items: [
+        MenuItem(
+          icon: Icons.edit,
+          label: 'Rename',
+          onTap: () => _showRenameSessionDialog(context, provider, session),
+        ),
+        MenuItem(
+          icon: Icons.link_off,
+          label: 'Disconnect',
+          color: Colors.red,
+          onTap: () => _showDisconnectDialog(context, provider, session),
+        ),
+      ],
+    );
+  }
+
+  void _showRenameSessionDialog(BuildContext context, ServerProvider provider, session) {
+    final controller = TextEditingController(text: session.customName ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename session'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Custom name',
+            helperText: 'Leave empty to reset to folder name',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              provider.renameSession(server, session, controller.text);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDisconnectDialog(BuildContext context, ServerProvider provider, session) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Disconnect session?'),
+        content: Text('Remove "${session.displayName}" from the server\'s connected sessions? The terminal will no longer appear here until it re-registers.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              provider.disconnectSession(server, session);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Disconnect', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }

@@ -29,6 +29,7 @@ class ServerProvider extends ChangeNotifier with WidgetsBindingObserver {
             .map((s) => Session.fromJson(s as Map<String, dynamic>))
             .toList();
         if (serverUrl != null) {
+          _applyCustomSessionNames(serverUrl, sessions);
           _serverSessions[serverUrl] = sessions;
         }
         notifyListeners();
@@ -138,5 +139,47 @@ class ServerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void refreshSessions(ServerConfig config) {
     _ws.sendTo(config.wsUrl, {'type': 'list_sessions'});
+  }
+
+  Future<void> renameServer(ServerConfig config, String? newName) async {
+    final updated = config.copyWith(customName: newName?.trim().isEmpty == true ? null : newName?.trim());
+    await _storage.saveServer(updated);
+    _savedServers = _storage.getSavedServers();
+    notifyListeners();
+  }
+
+  ServerConfig? _serverByUrl(String wsUrl) {
+    for (final s in _savedServers) {
+      if (s.wsUrl == wsUrl) return s;
+    }
+    return null;
+  }
+
+  void _applyCustomSessionNames(String wsUrl, List<Session> sessions) {
+    final server = _serverByUrl(wsUrl);
+    if (server == null) return;
+    final names = _storage.getSessionNames(server.serverId);
+    for (final s in sessions) {
+      final n = names[s.id];
+      if (n != null) s.customName = n;
+    }
+  }
+
+  Future<void> renameSession(ServerConfig server, Session session, String? newName) async {
+    final trimmed = newName?.trim();
+    await _storage.setSessionName(
+      server.serverId,
+      session.id,
+      (trimmed == null || trimmed.isEmpty) ? null : trimmed,
+    );
+    session.customName = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+    notifyListeners();
+  }
+
+  void disconnectSession(ServerConfig server, Session session) {
+    _ws.sendTo(server.wsUrl, {
+      'type': 'disconnect_session',
+      'session_id': session.id,
+    });
   }
 }

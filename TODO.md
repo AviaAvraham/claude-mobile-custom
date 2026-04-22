@@ -10,14 +10,14 @@
 9. ~~DONE - Multi-server support (auto-connect all servers, per-server sessions)~~
 13. Redesign theme (keep dark mode)
 14. ~~DONE - Dismiss keyboard when expanding permission details~~
-15. Add emoji support on app
+15. ~~DONE - Emoji / UTF-8 support (heredoc/stdin pattern for curl→phone)~~
 16. Allow renaming of servers and sessions on app
 17. Allow disconnecting sessions via the app
 18. Cross-session communication — let Claude talk to other registered sessions via the relay
-19. Reliable /usage from JSONL token parsing instead of statusLine
+19. ~~DONE - Reliable /usage (via API rate-limit headers in claude_usage.py)~~
 
 ## Claude-suggested
-10. Automate session setup (server start, register, monitor)
+10. ~~DONE - Automate session setup (register.sh auto-starts server; explicit /register is intentional)~~
 11. Persistent tunnel URL (Cloudflare named tunnel)
 12. ~~DONE - Monitor uses fixed log file~~
-13. Keep server/tunnel alive as a Windows service (survive sleep/reboot)
+13. Keep server/tunnel alive across reboot/sleep — is it needed? (Task Scheduler entry would be simplest if so)

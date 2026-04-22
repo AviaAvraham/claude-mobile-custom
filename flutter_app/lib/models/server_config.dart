@@ -5,12 +5,14 @@ class ServerConfig {
   final String url;
   final String token;
   final String serverId;
+  final String? customName;
 
   const ServerConfig({
     required this.name,
     required this.url,
     required this.token,
     required this.serverId,
+    this.customName,
   });
 
   factory ServerConfig.fromQrJson(String jsonStr) {
@@ -29,6 +31,7 @@ class ServerConfig {
       url: map['url'] as String,
       token: map['token'] as String,
       serverId: map['serverId'] as String? ?? map['name'] as String? ?? 'unknown',
+      customName: map['customName'] as String?,
     );
   }
 
@@ -37,7 +40,18 @@ class ServerConfig {
         'url': url,
         'token': token,
         'serverId': serverId,
+        if (customName != null) 'customName': customName,
       };
+
+  String get displayName => (customName != null && customName!.isNotEmpty) ? customName! : name;
+
+  ServerConfig copyWith({String? customName}) => ServerConfig(
+        name: name,
+        url: url,
+        token: token,
+        serverId: serverId,
+        customName: customName ?? this.customName,
+      );
 
   String get wsUrl {
     final uri = Uri.parse(url);

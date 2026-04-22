@@ -574,6 +574,18 @@ function handlePhoneMessage(msg) {
       break;
     }
 
+    case 'disconnect_session': {
+      const id = msg.session_id;
+      if (id && state.sessions.has(id)) {
+        state.sessions.delete(id);
+        console.log(`Session disconnected by phone: ${id}`);
+        // Notify the CLI session's monitor via the message log
+        logMessage(`SESSION_DISCONNECTED:${JSON.stringify({session_id: id, reason: 'disconnected by phone'})}`);
+        sendToPhone({ type: 'sessions', sessions: getSessionsList() });
+      }
+      break;
+    }
+
     case 'ping': {
       sendToPhone({ type: 'pong' });
       break;

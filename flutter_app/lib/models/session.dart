@@ -4,6 +4,7 @@ class Session {
   final String? transcriptPath;
   final String? registeredAt;
   bool isWaiting;
+  String? customName;
 
   Session({
     required this.id,
@@ -11,6 +12,7 @@ class Session {
     this.transcriptPath,
     this.registeredAt,
     this.isWaiting = false,
+    this.customName,
   });
 
   factory Session.fromJson(Map<String, dynamic> map) {
@@ -23,6 +25,7 @@ class Session {
   }
 
   String get displayName {
+    if (customName != null && customName!.isNotEmpty) return customName!;
     if (projectDir != null && projectDir!.isNotEmpty) {
       final parts = projectDir!.replaceAll('\\', '/').split('/');
       final folder = parts.last;

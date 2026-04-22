@@ -51,6 +51,27 @@ class StorageService {
     return ServerConfig.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
   }
 
+  // ── Session custom names (per server) ──
+
+  String _sessionNamesKey(String serverId) => 'session_names_$serverId';
+
+  Map<String, String> getSessionNames(String serverId) {
+    final jsonStr = _prefs.getString(_sessionNamesKey(serverId));
+    if (jsonStr == null) return {};
+    final map = json.decode(jsonStr) as Map<String, dynamic>;
+    return map.map((k, v) => MapEntry(k, v as String));
+  }
+
+  Future<void> setSessionName(String serverId, String sessionId, String? name) async {
+    final names = getSessionNames(serverId);
+    if (name == null || name.isEmpty) {
+      names.remove(sessionId);
+    } else {
+      names[sessionId] = name;
+    }
+    await _prefs.setString(_sessionNamesKey(serverId), json.encode(names));
+  }
+
   // ── Chat message persistence ──
 
   String _messagesKey(String sessionId) => 'messages_$sessionId';
